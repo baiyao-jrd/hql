@@ -169,3 +169,107 @@ select user_id,
        end as membership_level
 from temp_table
 order by user_id asc, buy_date asc;
+
+
+-- 5. 查询首次消费后第二天仍然消费的用户占所有用户的比率，结果保留一位小数，使用百分数表示
+select *
+from user_consum_details;
+
+with temp_table as (
+    select
+        user_id,
+        buy_date,
+        ranking,
+        2 as flag_2
+    from (
+        select *, 1 as flag, rank() over (partition by user_id order by buy_date asc) as ranking
+        from user_consum_details
+    ) as table_temp
+    where ranking <= 2
+)
+select round(flag_1 * 100, 1) as percent_rate
+from (
+    select (count(distinct user_id)) / (select count(distinct user_id) from temp_table group by flag_2) as flag_1
+    from (
+        select
+            user_id,
+            1 as flag_1
+        from temp_table
+        where user_id not in (select user_id from temp_table group by user_id having count(*) < 2)
+        group by user_id
+        having count(distinct date_sub(buy_date, ranking)) = 1
+    ) as table_temp
+    group by flag_1
+) as table_temp;
+
+
+select 1 * 2 as flag;
+
+-- 6. 订单明细表每行代表一次销售，请计算每个商品第一年的销售数量，销售年份和销售总额
+
+drop table if exists order_detail;
+
+create table order_detail (
+    order_id varchar(32) not null comment '订单id',
+    id varchar(32) comment '商品id',
+    price int comment '订单总额',
+    sale_date date comment '商品销售日期',
+    num int comment '商品件数'
+) comment '订单明细表'
+row format delimited fields terminated by '\t'
+null defined as ''
+location '/warehouse/sdc/rds/order_detail';
+
+INSERT INTO order_detail VALUES ('1','1',80,'2021-12-29',8),('2','1',10,'2021-12-30',1),('3','2',55,'2021-04-30',5),('3','2',55,'2020-04-30',5),('4','3',550,'2021-03-31',10),('5','4',550,'2021-05-04',15),('6','2',30,'2021-08-07',3),('7','2',60,'2020-08-09',6);
+
+select *
+from order_detail;
+
+with temp_table as (
+    select id, min(year(sale_date)) as first_year
+    from order_detail
+    group by id
+)
+select
+    order_detail.id,
+    first_year,
+    sum(num) as num_total,
+    sum(price) as price_total
+from order_detail
+left join temp_table
+on order_detail.id = temp_table.id
+where year(sale_date) = first_year
+group by order_detail.id, first_year
+order by order_detail.id asc;
+
+-- 7. 不考虑上架时间小于一个月的商品，假设今天的日期是2022-01-10。请筛选出去年总销量小于10的商品
+
+drop table if exists product_attr;
+
+create table product_attr (
+    id varchar(32) comment '商品id',
+    name varchar(32) comment '商品名称',
+    category_id varchar(32) comment '商品所属品类id',
+    from_date date comment '商品上架日期'
+) comment '商品属性表'
+row format delimited fields terminated by '\t'
+null defined as ''
+location '/warehouse/sdc/rds/product_attr';
+
+INSERT INTO product_attr VALUES ('1','xiaomi','1','2021-12-23'),('2','apple','1','2020-10-18'),('3','nokia','1','2019-10-29'),('4','vivo','1','2020-02-02');
+
+select *
+from product_attr;
+
+select *
+from order_detail;
+
+select order_detail.id,
+       name
+from order_detail
+left join product_attr
+on order_detail.id = product_attr.id
+where datediff('2022-01-10', from_date) > 30 and year(sale_date) = 2021
+group by order_detail.id, name
+having sum(num) < 10
+order by order_detail.id asc;
