@@ -1071,3 +1071,202 @@ from (
      ) as table_temp
 where ranking <= 3
 order by user_id asc, sale_date asc;
+
+-- 21. 用户登录日期的最大空挡期：对于每一个用户，求出每次访问和下一次访问之间的最大空档天数，如果是表中的最后一次访问，
+-- 则需要计算最后一次访问和今天之间的天数，假设今天：2022-01-01。
+
+drop table if exists user_active_3;
+
+create table user_active_3
+(
+    user_id     varchar(32) comment '用户id',
+    active_date date comment '用户登录日期时间'
+) comment '用户活跃表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/dsc/rds/user_active_3';
+
+INSERT INTO user_active_3
+VALUES ('1', '2021-10-20'),
+       ('1', '2021-11-28'),
+       ('1', '2021-12-08'),
+       ('2', '2021-10-05'),
+       ('2', '2021-12-09'),
+       ('3', '2021-11-11');
+
+-- 用户活跃表
+select *
+from user_active_3;
+
+select user_id,
+       max(gap_period) as max_gap_period
+from (
+         select user_id,
+                datediff(lead(active_date, 1, '2022-01-01') over (partition by user_id order by active_date asc),
+                         active_date) as gap_period
+         from user_active_3
+     ) as table_temp
+group by user_id
+order by user_id asc;
+
+-- 22. 账号多地登录
+
+drop table if exists user_active_4;
+
+create table user_active_4
+(
+    user_id    varchar(32) comment '用户id',
+    ip_address varchar(32) comment '用户登录ip地址',
+    login_ts   timestamp not null comment '登录时间',
+    logout_ts  timestamp not null comment '登出时间'
+) comment '用户活跃表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_active_4';
+
+INSERT INTO user_active_4
+VALUES ('1', '1', '2021-02-01 01:00:00', '2021-02-01 01:30:00'),
+       ('1', '2', '2021-02-01 00:00:00', '2021-02-01 03:30:00'),
+       ('2', '6', '2021-02-01 12:30:00', '2021-02-01 14:00:00'),
+       ('2', '7', '2021-02-02 12:30:00', '2021-02-02 14:00:00'),
+       ('3', '9', '2021-02-01 08:00:00', '2021-02-01 08:59:59'),
+       ('3', '13', '2021-02-01 09:00:00', '2021-02-01 09:59:59'),
+       ('4', '10', '2021-02-01 08:00:00', '2021-02-01 09:00:00'),
+       ('4', '11', '2021-02-01 09:00:00', '2021-02-01 09:59:59');
+
+-- 用户活跃表
+select *
+from user_active_4;
+
+select u1.user_id, u1.ip_address as ip_1, u2.ip_address as ip_2
+from user_active_4 u1,
+     user_active_4 u2
+where u1.user_id = u2.user_id
+  and u1.ip_address < u2.ip_address
+  and (u1.login_ts between u2.login_ts and u2.logout_ts or u1.logout_ts between u2.login_ts and u2.logout_ts)
+order by u1.user_id asc, ip_1 asc;
+
+-- 23. 销售额完成任务指标的商品
+--     -> 假如每个商品每个月需要售卖出一定的销售总额，请查询连续两个月销售总额大于任务总额的商品
+
+drop table if exists order_info;
+
+create table order_info
+(
+    order_id  varchar(32) comment '订单id',
+    id        varchar(32) comment '商品id',
+    price     int comment '订单总额',
+    num       int comment '商品件数',
+    sale_date date comment '商品销售日期'
+) comment '订单详情表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_info';
+
+drop table if exists product_supply;
+
+create table product_supply
+(
+    id         varchar(32) comment '商品id',
+    assignment int comment '商品每个月固定的销售任务指标'
+) comment '商品供应数量表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_supply';
+
+INSERT INTO order_info
+VALUES ('2', '1', 107100, 1, '2021-06-02'),
+       ('4', '2', 10400, 1, '2021-06-20'),
+       ('11', '2', 58800, 1, '2021-07-23'),
+       ('1', '2', 49300, 1, '2021-05-03'),
+       ('15', '1', 75500, 1, '2021-05-23'),
+       ('10', '1', 102100, 1, '2021-06-15'),
+       ('14', '2', 56300, 1, '2021-07-21'),
+       ('19', '2', 101100, 1, '2021-05-09'),
+       ('8', '1', 64900, 1, '2021-07-26'),
+       ('7', '1', 90900, 1, '2021-06-14');
+
+INSERT INTO product_supply
+VALUES ('1', 21000),
+       ('2', 10400);
+
+-- 订单详情表
+select *
+from order_info;
+
+-- 商品供应数量表
+select *
+from product_supply;
+
+with temp_table as (
+    select o.id,
+           date_format(sale_date, 'yyyy-MM') as year_month,
+           sum(price)                        as total_price,
+           assignment
+    from order_info o
+             left join product_supply p
+                       on o.id = p.id
+    group by assignment, o.id, date_format(sale_date, 'yyyy-MM')
+)
+select id, year_month, next_year_month
+from (
+         select id,
+                year_month,
+                lead(year_month, 1, '9999-12') over (partition by id order by year_month asc) as next_year_month
+         from temp_table
+         where total_price > assignment
+     ) as table_temp
+where substr(year_month, 1, 4) = substr(next_year_month, 1, 4)
+  and cast(substr(year_month, 6, 2) as int) = cast(substr(next_year_month, 6, 2) as int) - 1;
+
+-- 24. 按照销售件数对商品进行分类
+--     ->   冷门商品 0  ->  一般商品 5001   ->  热门商品 20000
+
+drop table if exists sales_num;
+
+create table sales_num
+(
+    id  varchar(32) comment '商品id',
+    num int comment '商品销售件数'
+) comment '商品销售详情表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/sales_num';
+
+INSERT INTO sales_num
+VALUES ('1', 300),
+       ('2', 4000),
+       ('3', 9000),
+       ('4', 40000);
+
+-- 商品销售详情表
+select *
+from sales_num;
+
+with temp_table as (
+    select id,
+           case
+               when num >= 20000 then '热门商品'
+               when num >= 5001 then '一般商品'
+               else '冷门商品'
+               end as category
+    from sales_num
+)
+select temp_1.category,
+       num
+from (
+         select '冷门商品' as category
+         union all
+         select '一般商品' as category
+         union all
+         select '热门商品' as category
+     ) as temp_1
+         left join (
+    select category,
+           count(distinct id) as num
+    from temp_table
+    group by category
+) as temp_2
+                   on temp_1.category = temp_2.category;
+
+-- 25.
