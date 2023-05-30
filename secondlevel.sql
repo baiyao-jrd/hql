@@ -1772,3 +1772,81 @@ where temp_1.transa_nums <= (
     group by flag
 )
 order by temp_1.transa_nums asc;
+
+-- 33. 按年度列出销售总额
+
+drop table if exists product_detail_2;
+
+create table product_detail_2
+(
+    product_id   varchar(32) comment '商品id',
+    product_name varchar(32) comment '商品名称'
+) comment '产品明细表'
+    row format delimited fields terminated by '/t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_detail_2';
+
+drop table if exists deal_record;
+
+create table deal_record
+(
+    product_id varchar(32) comment '商品id',
+    start_date date comment '商品销售起始日期',
+    end_date   date comment '商品销售结束日期',
+    avg        int comment '商品平均每日销售额'
+) comment '成交记录表'
+    row format delimited fields terminated by '/t'
+        null defined as ''
+    location '/warehouse/sdc/rds/deal_record';
+
+INSERT INTO product_detail_2
+VALUES ('1', 'xiaomi'),
+       ('2', 'apple'),
+       ('3', 'vivo');
+
+INSERT INTO deal_record
+VALUES ('1', '2019-01-25', '2019-02-28', 100),
+       ('2', '2018-12-01', '2020-01-01', 10),
+       ('3', '2019-12-01', '2020-01-31', 1);
+
+-- 产品明细表
+select *
+from product_detail_2;
+
+-- 成交记录表
+select *
+from deal_record;
+
+select product_name,
+       start_date,
+       end_date,
+       avg
+from deal_record d
+         left join product_detail_2 p on d.product_id = p.product_id;
+
+
+with temp_table as (
+    select min(year_date) as min_year,
+           max(year_date) as max_year
+    from (
+             select year(start_date) as year_date,
+                    1                as flag
+             from deal_record
+             union all
+             select year(end_date) as year_date,
+                    1              as flag
+             from deal_record
+         ) as table_temp
+    group by flag
+)
+select concat(seq, '-', month_day) as year_month_day
+from (
+         select seq
+         from (
+                  select posexplode(split(space(max_year), ' ')) as (seq, dummy)
+                  from temp_table
+              ) as temp1
+                  left join temp_table
+         where seq between min_year and max_year
+     ) as temp_1,
+     (select '01-01' as month_day union all select '12-31' as month_day) as temp_2;
