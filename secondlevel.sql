@@ -1269,4 +1269,506 @@ from (
 ) as temp_2
                    on temp_1.category = temp_2.category;
 
--- 25.
+-- 25. 付款率：用户下单之后需要付款，如果在30min内未付款，就会超时。求每个用户的付款率。
+
+drop table if exists payment_detail;
+
+create table payment_detail
+(
+    user_id     varchar(32) comment '用户id',
+    `timestamp` timestamp not null comment '用户下单时间',
+    action      varchar(32) comment '下单是否超时'
+) comment '用户付款详情表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/payment_detail';
+
+drop table if exists user_info_2;
+
+create table user_info_2
+(
+    user_id     varchar(32) comment '用户id',
+    active_date date comment '用户注册日期'
+) comment '用户信息表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_info_2';
+
+set hive.execution.engine = spark;
+
+INSERT INTO payment_detail
+VALUES ('1', '2021-01-05 19:30:46', 'timeout'),
+       ('1', '2021-07-14 06:00:00', 'timeout'),
+       ('2', '2021-01-05 19:30:46', 'success'),
+       ('2', '2021-07-14 06:00:00', 'success'),
+       ('2', '2021-01-04 19:30:46', 'success'),
+       ('3', '2021-07-14 06:00:00', 'success'),
+       ('3', '2021-01-05 19:30:46', 'timeout');
+
+INSERT INTO user_info_2
+VALUES ('1', '2021-10-20'),
+       ('2', '2021-10-05'),
+       ('3', '2021-11-11'),
+       ('4', '2022-04-12');
+
+-- 用户付款详情表
+select *
+from payment_detail;
+
+-- 用户信息表
+select *
+from user_info_2;
+
+select user_info_2.user_id,
+       nvl(payment_rate, 0) as payment_rate
+from user_info_2
+         left join (
+    select user_id,
+           count(`if`(action = 'success', 1, null)) / count(`timestamp`) as payment_rate
+    from payment_detail
+    group by user_id
+) as table_temp
+                   on user_info_2.user_id = table_temp.user_id;
+
+-- 26. 商品库存变化
+
+drop table if exists stock_detail;
+
+create table stock_detail
+(
+    id     varchar(32) comment '商品id',
+    `date` date comment '变化时间',
+    action varchar(32) comment '补货或者是售货',
+    amount int comment '补货或者售货数量'
+) comment '商品库存明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/stock_detail';
+
+INSERT INTO stock_detail
+VALUES ('1', '2021-01-01', 'supply', 2000),
+       ('1', '2021-01-03', 'sell', 1000),
+       ('1', '2021-01-05', 'supply', 3000),
+       ('2', '2021-01-01', 'supply', 7000),
+       ('2', '2021-01-01', 'supply', 1000),
+       ('2', '2021-01-04', 'sell', 8000);
+
+-- 商品库存明细表
+select *
+from stock_detail;
+
+with temp_table as (
+    select id,
+           `date`,
+           action,
+           case
+               when action = 'supply' then sum(amount)
+               when action = 'sell' then -sum(amount)
+               end as amount_total
+    from stock_detail
+    group by id, `date`, action
+)
+select id,
+       `date`,
+       sum(amount_total) over (partition by id order by `date` asc) as stock
+from temp_table
+order by id asc, `date` asc;
+
+-- 27. 各品类销量前三的所有商品：从商品销售明细表中查询各个品类销售数量前三的商品
+--     如果该品类小于三个商品，则输出所有的商品销量。
+
+drop table if exists order_summary_1;
+
+create table order_summary_1
+(
+    id          varchar(32) comment '商品id',
+    category_id varchar(32) comment '商品所属品类id',
+    sum         int comment '商品销售总额累计'
+) comment '订单汇总表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_summary_1';
+
+INSERT INTO order_summary_1
+VALUES ('1', '1', 66),
+       ('2', '1', 23),
+       ('3', '1', 78),
+       ('4', '2', 23),
+       ('5', '3', 89),
+       ('6', '1', 99),
+       ('9', '1', 128);
+
+-- 订单汇总表
+select *
+from order_summary_1;
+
+-- 品类表
+select *
+from category;
+
+with temp_table as (
+    select category_name,
+           id,
+           rank() over (partition by category_name order by sum desc) as ranking
+    from order_summary_1 o
+             left join category c on o.category_id = c.category_id
+)
+select distinct id, category_name, ranking
+from temp_table
+where ranking <= 3
+order by category_name asc, id asc;
+
+-- 28. 各品类中商品价格的中位数：如果是偶数就输出中间两个值的平均值，如果是奇数就输出中间数即可。
+
+drop table if exists product_detail;
+
+create table product_detail
+(
+    id          varchar(32) comment '商品id',
+    category_id varchar(32) comment '商品所属品类id',
+    price       int comment '商品售价'
+) comment '商品详情表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_detail';
+
+INSERT INTO product_detail
+VALUES ('1', '1', 23),
+       ('2', '1', 45),
+       ('3', '1', 46),
+       ('4', '2', 56),
+       ('5', '2', 45),
+       ('6', '3', 76),
+       ('7', '3', 23),
+       ('8', '3', 55);
+
+-- 商品详情表
+select *
+from product_detail;
+
+-- 品类表
+select *
+from category;
+
+
+with temp_table as (
+    select category_name,
+           id,
+           price,
+           row_number() over (partition by category_name order by price asc) as rn,
+           count(id) over (partition by category_name)                       as total_product_nums
+    from product_detail p
+             left join category c
+                       on p.category_id = c.category_id
+)
+select category_name,
+       round((max(price) + min(price)) / 2, 2) as median
+from (
+         select category_name,
+                id,
+                price
+         from temp_table
+         where rn = `if`(total_product_nums % 2 = 0, total_product_nums / 2, `ceiling`(total_product_nums / 2))
+            or rn = `if`(total_product_nums % 2 = 0, total_product_nums / 2 + 1, `ceiling`(total_product_nums / 2))
+     ) as table_temp
+group by category_name
+order by category_name asc;
+
+
+-- 29. 找出销售额连续多天超过100的记录
+
+drop table if exists order_detail_9;
+
+create table order_detail_9
+(
+    order_id varchar(32) comment '商品id',
+    `date`   date comment '商品销售日期',
+    price    int comment '商品当天销售额'
+) comment '订单明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_detail_9';
+
+INSERT INTO order_detail_9
+VALUES ('1', '2021-01-01', 10),
+       ('2', '2021-01-02', 109),
+       ('3', '2021-01-03', 158),
+       ('4', '2021-01-04', 99),
+       ('5', '2021-01-05', 145),
+       ('6', '2021-01-06', 1455),
+       ('7', '2021-01-07', 1199),
+       ('8', '2021-01-08', 188);
+
+-- 订单明细表
+select *
+from order_detail_9;
+
+with temp_table as (
+    select order_id,
+           `date`,
+           price,
+           ranking,
+           flag,
+           date_sub(`date`, ranking) as date_sub
+    from (
+             select order_id,
+                    `date`,
+                    price,
+                    rank() over (partition by flag order by `date` asc) as ranking,
+                    flag
+             from (select *, 1 as flag from order_detail_9) as order_detail_9
+             where price > 100
+         ) as table_temp
+)
+select order_id,
+       `date`,
+       price
+from temp_table
+where date_sub in (select date_sub
+                   from temp_table
+                   group by date_sub
+                   having count(*) >= 3)
+order by `date` asc;
+
+set hive.execution.engine = spark;
+
+-- 30. 查询有新注册用户的当天的新用户数量、新用户的第一天留存率
+
+drop table if exists user_login_detail_1;
+
+create table user_login_detail_1
+(
+    user_id varchar(32) comment '用户id',
+    `date`  date comment '商品销售日期',
+    price   int comment '商品当天销售额'
+) comment '用户登录明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_login_detail_1';
+
+INSERT INTO user_login_detail_1
+VALUES ('1', '2022-01-01', 50),
+       ('1', '2022-01-02', 100),
+       ('2', '2022-03-01', 100),
+       ('3', '2022-01-01', 100),
+       ('3', '2022-02-01', 800);
+
+-- 用户登录明细表
+select *
+from user_login_detail_1;
+
+with temp_table as (
+    select user_id,
+           min(`date`) as register_date
+    from user_login_detail_1
+    group by user_id
+)
+select temp_1.register_date,
+       new_user_nums,
+       round(retention_user_nums / new_user_nums, 2) as ratention_rate
+from (
+         select register_date,
+                count(distinct user_id) as new_user_nums
+         from temp_table
+         group by register_date
+     ) as temp_1
+         left join (
+    select register_date,
+           count(`if`(ratention_user = 1, 1, null)) as retention_user_nums
+    from (
+             select user_id,
+                    register_date,
+                    case
+                        when date_add(register_date, 1) in
+                             (select `date` from user_login_detail_1 where user_id = t.user_id) then 1
+                        else 0
+                        end as ratention_user
+             from temp_table t
+         ) as temp
+    group by register_date
+) temp_2
+                   on temp_1.register_date = temp_2.register_date
+order by temp_1.register_date asc;
+
+-- 31. 某商品售卖明细表求出连续售卖的时间区间和非连续售卖的时间区间
+--     只统计2021-01-01到2021-12-31之间的数据，如果有非售卖记录，那就是nosale的起止日期
+--     如果有售卖记录，那就是sale的起止日期
+
+drop table if exists sales;
+
+create table sales
+(
+    `date` date comment '商品销售日期'
+) comment '售卖表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/sales'
+
+drop table if exists no_sales;
+
+create table no_sales
+(
+    `date` date comment '商品销售日期'
+) comment '无售卖表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/no_sales';
+
+INSERT INTO sales
+VALUES ('2020-12-30'),
+       ('2020-12-31'),
+       ('2021-01-04'),
+       ('2021-01-05');
+
+INSERT INTO no_sales
+VALUES ('2020-12-29'),
+       ('2021-01-01'),
+       ('2021-01-02'),
+       ('2021-01-03'),
+       ('2021-01-06');
+
+-- 售卖表
+select *
+from sales;
+
+-- 无售卖表
+select *
+from no_sales;
+
+select concat('售卖区间：', min(`date`), ' ~ ', max(`date`)) as area
+from (
+         select `date`, date_sub(`date`, rk) as rk_base
+         from (
+                  select `date`,
+                         rank() over (partition by flag order by `date`) as rk
+                  from (select `date`, 1 as flag from sales) as temp_1
+              ) as temp_2
+     ) as temp_3
+where `date` between '2021-01-01' and '2021-12-31'
+group by rk_base
+union all
+select concat('非售卖区间：', min(`date`), ' ~ ', max(`date`)) as area
+from (
+         select `date`, date_sub(`date`, rk) as rk_base
+         from (
+                  select `date`,
+                         rank() over (partition by flag order by `date`) as rk
+                  from (select `date`, 1 as flag from no_sales) as temp_1
+              ) as temp_2
+     ) as temp_3
+where `date` between '2021-01-01' and '2021-12-31'
+group by rk_base
+order by substr(area, -1, 23) asc;
+
+-- 32. 有登录记录和交易记录两张表，查询 -> 多少用户登录了但未交易 -> 多少用户登录了并进行一次、两次，，，，交易
+
+drop table if exists register;
+
+create table register
+(
+    user_id varchar(32) comment '用户id',
+    `date`  date comment '用户登录日期'
+) comment '登录记录表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/register';
+
+drop table if exists transaction_recode;
+
+create table transaction_recode
+(
+    user_id varchar(32) comment '用户id',
+    `date`  date comment '商品销售日期',
+    price   int comment '商品当天销售额'
+) comment '交易记录表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/transaction_recode';
+
+INSERT INTO register
+VALUES ('1', '2021-01-01'),
+       ('2', '2021-01-02'),
+       ('3', '2021-01-01'),
+       ('6', '2021-01-03'),
+       ('1', '2021-01-02'),
+       ('2', '2021-01-03'),
+       ('1', '2021-01-04'),
+       ('7', '2021-01-11'),
+       ('9', '2021-01-25'),
+       ('8', '2021-01-28');
+
+INSERT INTO transaction_recode
+VALUES ('1', '2021-01-02', 120),
+       ('2', '2021-01-03', 120),
+       ('7', '2021-01-11', 120),
+       ('1', '2021-01-04', 120),
+       ('9', '2021-01-25', 120),
+       ('9', '2021-01-25', 120),
+       ('8', '2021-01-28', 120),
+       ('9', '2021-01-25', 120);
+
+-- 登录记录表
+select *
+from register;
+
+-- 交易记录表
+select *
+from transaction_recode;
+
+-- 方式1：按照用户统计
+with temp_table as (
+    select user_id,
+           count(*) as transa_nums
+    from transaction_recode
+    group by user_id)
+select case
+           when transa_nums = 0 then concat(user_nums, '人登录了未交易')
+           else concat(user_nums, '人登录了，并进行了', transa_nums, '次交易')
+           end as report
+from (
+         select transa_nums,
+                count(user_id) as user_nums
+         from (
+                  select r.user_id,
+                         nvl(transa_nums, 0) as transa_nums
+                  from (select user_id from register group by user_id) as r
+                           left join temp_table t
+                                     on r.user_id = t.user_id
+              ) as table_temp
+         group by transa_nums
+     ) as table_temp;
+
+
+-- 方式2：按照人次统计
+with temp_table as (
+    select transa_nums,
+           count(user_id) as user_nums,
+           1              as flag
+    from (
+             select r.user_id,
+                    r.`date`,
+                    nvl(transa_nums, 0) as transa_nums
+             from register r
+                      left join (select user_id,
+                                        `date`,
+                                        count(*) as transa_nums
+                                 from transaction_recode
+                                 group by user_id, `date`) as t
+                                on r.user_id = t.user_id and r.`date` = t.`date`
+         ) as table_temp
+    group by transa_nums
+)
+select temp_1.transa_nums as transa_nums,
+       nvl(user_nums, 0)  as user_nums
+from temp_table as temp_2
+         right join (select 0 as transa_nums
+                     union
+                     select row_number() over () as transa_nums
+                     from transaction_recode) as temp_1
+                    on temp_1.transa_nums = temp_2.transa_nums
+where temp_1.transa_nums <= (
+    select max(transa_nums)
+    from temp_table
+    group by flag
+)
+order by temp_1.transa_nums asc;
