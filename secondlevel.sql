@@ -1602,7 +1602,7 @@ create table sales
 ) comment '售卖表'
     row format delimited fields terminated by '\t'
         null defined as ''
-    location '/warehouse/sdc/rds/sales'
+    location '/warehouse/sdc/rds/sales';
 
 drop table if exists no_sales;
 
@@ -1839,14 +1839,907 @@ with temp_table as (
          ) as table_temp
     group by flag
 )
-select concat(seq, '-', month_day) as year_month_day
+select product_name,
+       year(date_flag)                                 as year,
+       datediff(next_date_flag, date_flag) * avg + avg as total_sales
 from (
-         select seq
+         select product_id,
+                date_flag,
+                lead(date_flag, 1, concat(year(date_flag), '-01-01'))
+                     over (partition by product_id order by date_flag) as next_date_flag,
+                avg
          from (
-                  select posexplode(split(space(max_year), ' ')) as (seq, dummy)
-                  from temp_table
-              ) as temp1
+                  select product_id, date_flag, avg
+                  from (
+                           select product_id, concat(seq, '-', month_day) as date_flag, avg
+                           from (
+                                    select seq
+                                    from (
+                                             select posexplode(split(space(max_year), ' ')) as (seq, dummy)
+                                             from temp_table
+                                         ) as temp1
+                                             left join temp_table
+                                    where seq between min_year and max_year
+                                ) as temp_1,
+                                (select '01-01' as month_day union all select '12-31' as month_day) as temp_2,
+                                (select product_id, avg from deal_record) as temp_3
+                           union
+                           select product_id, cast(start_date as string) as date_flag, avg
+                           from deal_record
+                           union all
+                           select product_id, cast(end_date as string) as date_flag, avg
+                           from deal_record
+                       ) as temp_4
+                  where date_flag between (select start_date
+                                           from deal_record
+                                           where product_id = temp_4.product_id) and (select end_date from deal_record where product_id = temp_4.product_id)
+                  group by product_id, date_flag, avg
+              ) as temp_5
+     ) as temp_6
+         left join product_detail_2
+                   on temp_6.product_id = product_detail_2.product_id
+where substr(date_flag, 1, 4) = substr(next_date_flag, 1, 4)
+  and next_date_flag >= date_flag;
+
+-- 34. 查询周内每天每个商品类别售卖了多少件
+
+drop table if exists order_detail_2;
+
+create table order_detail_2
+(
+    order_id  varchar(32) not null comment '订单id',
+    id        varchar(32) comment '商品id',
+    price     int comment '订单总额',
+    num       int comment '商品件数',
+    sale_date date comment '商品销售日期'
+) comment '订单明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_detail_2';
+
+drop table if exists product_detail2;
+
+create table product_detail2
+(
+    product_id   varchar(32) comment '商品id',
+    product_name varchar(32) comment '商品名称',
+    category     varchar(32) comment '商品类别'
+) comment '产品明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_detail2';
+
+INSERT INTO order_detail_2
+VALUES ('1', '1', 80, 8, '2021-12-29'),
+       ('2', '1', 10, 1, '2021-12-30'),
+       ('3', '2', 55, 5, '2021-04-30'),
+       ('3', '2', 55, 5, '2021-04-30'),
+       ('4', '3', 550, 10, '2021-03-31'),
+       ('5', '4', 550, 15, '2021-05-04'),
+       ('6', '2', 30, 3, '2021-08-07'),
+       ('7', '2', 60, 6, '2020-08-09'),
+       ('8', '4', 550, 15, '2021-05-05');
+
+INSERT INTO product_detail2
+VALUES ('1', 'bingxiang', 'dianqi'),
+       ('2', 'xiyiji', 'dianqi'),
+       ('3', 'xiaomi', 'phone'),
+       ('4', 'apple', 'phone'),
+       ('5', 'dami', 'food'),
+       ('6', 'kuzi', 'cloth');
+
+-- 订单明细表
+select *
+from order_detail_2;
+
+-- 产品明细表
+select *
+from product_detail2;
+
+with temp_table as (
+    select day_of_week,
+           category,
+           sum(num) as total_nums
+    from (
+             select order_id,
+                    category,
+                    num,
+                    case `dayofweek`(sale_date)
+                        when 1 then '周日'
+                        when 2 then '周一'
+                        when 3 then '周二'
+                        when 4 then '周三'
+                        when 5 then '周四'
+                        when 6 then '周五'
+                        when 7 then '周六'
+                        end as day_of_week
+             from order_detail_2,
+                  product_detail2
+             where id = product_id
+             group by order_id, category, num, sale_date
+         ) as temp_1
+    group by day_of_week, category
+)
+select category,
+       sum(`if`(day_of_week = '周一', total_nums, 0)) as `周一`,
+       sum(`if`(day_of_week = '周二', total_nums, 0)) as `周二`,
+       sum(`if`(day_of_week = '周三', total_nums, 0)) as `周三`,
+       sum(`if`(day_of_week = '周四', total_nums, 0)) as `周四`,
+       sum(`if`(day_of_week = '周五', total_nums, 0)) as `周五`,
+       sum(`if`(day_of_week = '周六', total_nums, 0)) as `周六`,
+       sum(`if`(day_of_week = '周日', total_nums, 0)) as `周日`
+from (
+         select table_temp.category,
+                nvl(day_of_week, null) as day_of_week,
+                nvl(total_nums, 0)     as total_nums
+         from (
+                  select category
+                  from product_detail2
+                  group by category
+              ) table_temp
                   left join temp_table
-         where seq between min_year and max_year
-     ) as temp_1,
-     (select '01-01' as month_day union all select '12-31' as month_day) as temp_2;
+                            on table_temp.category = temp_table.category
+     ) as table_temp
+group by category
+order by category asc;
+
+-- dayofweek -> 1 周日 -> 7 周六
+select `dayofweek`(`current_date`()) as test;
+
+select b.category,
+       nvl(sum(case when dayofweek(a.sale_date) = 2 then a.num end), 0) Monday,
+       nvl(sum(case when dayofweek(a.sale_date) = 3 then a.num end), 0) Tuesday,
+       nvl(sum(case when dayofweek(a.sale_date) = 4 then a.num end), 0) Wednesday,
+       nvl(sum(case when dayofweek(a.sale_date) = 5 then a.num end), 0) Thursday,
+       nvl(sum(case when dayofweek(a.sale_date) = 6 then a.num end), 0) Friday,
+       nvl(sum(case when dayofweek(a.sale_date) = 7 then a.num end), 0) Saturday,
+       nvl(sum(case when dayofweek(a.sale_date) = 1 then a.num end), 0) Sunday
+from order_detail_2 a
+         right join product_detail2 b -- 没有销售的产品也需要列出,所以以产品表为基表
+                    on a.id = b.product_id
+group by b.category
+;
+
+select *
+from order_detail_2
+where id in (1, 2)
+  and `dayofweek`(sale_date) = 6;
+
+-- 35. 查看每件商品的售价涨幅情况，按照涨幅升序排序
+
+drop table if exists price_change;
+
+create table price_change
+(
+    product_id varchar(32) comment '商品id',
+    price      varchar(32) comment '商品价格',
+    start_date date comment '起始日期',
+    end_date   date comment '结束日期'
+) comment '商品售价变化明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/price_change';
+
+INSERT INTO price_change
+VALUES ('1', '5000', '2020-01-01', '2020-01-01'),
+       ('1', '4500', '2020-01-01', '9999-01-01'),
+       ('2', '6000', '2020-02-01', '9999-01-01'),
+       ('3', '3000', '2020-03-01', '2020-03-08'),
+       ('3', '4000', '2020-03-08', '9999-01-01');
+
+-- 商品售价变化明细表
+select *
+from price_change;
+
+-- 这件商品什么时候涨的，涨了多少
+select product_id,
+       sum(next_price)  as next_price,
+       max(change_date) as change_date
+from (
+         select product_id,
+                - price + lead(price, 1, price) over (partition by product_id order by start_date asc) as next_price,
+                lead(start_date, 1, start_date) over (partition by product_id order by start_date asc) as change_date
+         from price_change
+     ) as table_temp
+group by product_id
+order by next_price asc;
+
+-- 36. 销售订单首购和次购分析：
+--     如果用户成功下单两个及以上数量的手机(xiaomi, apple, vivo)订单，那么输出 -> 用户id, 首次购买成功日期, 二次购买成功日期， 成功购买次数
+
+drop table if exists order_info_2;
+
+create table order_info_2
+(
+    order_id     varchar(32) comment '商品id',
+    user_id      varchar(32) comment '用户id',
+    product_name varchar(32) comment '商品名称',
+    status       varchar(32) comment '是否购买成功',
+    `date`       date comment '购买日期'
+) comment '订单详情表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_info_2';
+
+INSERT INTO order_info_2
+VALUES ('1', '100001', 'xiaomi', 'fail', '2021-01-01'),
+       ('2', '100002', 'apple', 'success', '2021-01-02'),
+       ('3', '100003', 'xiyiji', 'success', '2021-01-03'),
+       ('4', '100003', 'xiaomi', 'success', '2021-01-04'),
+       ('5', '100001', 'vivo', 'success', '2021-01-03'),
+       ('6', '100003', 'vivo', 'success', '2021-01-08'),
+       ('8', '100001', 'apple', 'success', '2021-01-06'),
+       ('7', '100001', 'xiaomi', 'success', '2021-01-05');
+
+-- 订单详情表
+select *
+from order_info_2;
+
+with temp_table as (
+    select *, 1 as flag
+    from order_info_2
+    where product_name in ('xiaomi', 'apple', 'vivo')
+      and status = 'success'
+)
+select user_id,
+       min(`date`) as first,
+       max(`date`) as second,
+       success_order_nums
+from (
+         select user_id,
+                `date`,
+                rank() over (partition by user_id order by `date` asc) as ranking,
+                count(order_id) over (partition by user_id)            as success_order_nums
+         from temp_table
+     ) as table_temp
+where ranking <= 2
+  and success_order_nums >= 2
+group by user_id, success_order_nums
+order by user_id asc;
+
+-- 37. 现在有各个商品的当天售卖明细表，需要求出同一个商品在2021年和2022年中同一个月的售卖情况对比。
+
+drop table if exists product_detail_3;
+
+create table product_detail_3
+(
+    order_id     varchar(32) comment '商品id',
+    product_name varchar(32) comment '商品名称',
+    num          int comment '商品售卖件数',
+    `date`       date comment '购买日期'
+) comment '商品明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_detail_3';
+
+INSERT INTO product_detail_3
+VALUES ('1', 'xiaomi', 53, '2021-01-02'),
+       ('2', 'apple', 23, '2021-01-02'),
+       ('3', 'vivo', 12, '2021-01-02'),
+       ('4', 'xiaomi', 54, '2021-01-03'),
+       ('5', 'apple', 43, '2021-01-03'),
+       ('6', 'vivo', 41, '2021-01-03'),
+       ('7', 'vivo', 24, '2021-02-03'),
+       ('8', 'xiaomi', 23, '2021-02-03'),
+       ('9', 'apple', 34, '2021-02-03'),
+       ('10', 'vivo', 42, '2021-02-04'),
+       ('11', 'xiaomi', 45, '2021-02-04'),
+       ('12', 'apple', 59, '2021-02-04'),
+       ('13', 'xiaomi', 230, '2022-01-04'),
+       ('14', 'vivo', 764, '2022-01-04'),
+       ('15', 'apple', 644, '2022-01-04'),
+       ('16', 'xiaomi', 240, '2022-01-06'),
+       ('17', 'vivo', 714, '2022-01-06'),
+       ('18', 'apple', 624, '2022-01-06'),
+       ('19', 'xiaomi', 260, '2022-01-04'),
+       ('20', 'vivo', 721, '2022-02-14'),
+       ('21', 'apple', 321, '2022-02-14'),
+       ('22', 'xiaomi', 134, '2022-02-14'),
+       ('23', 'vivo', 928, '2022-02-24'),
+       ('24', 'apple', 525, '2022-02-24'),
+       ('25', 'xiaomi', 231, '2020-02-06');
+
+-- 商品售卖明细表
+select *
+from product_detail_3;
+
+with temp_table as (
+    select product_name,
+           substr(`date`, 1, 7) as year_month,
+           sum(num)             as total_nums
+    from product_detail_3
+    where year(`date`) in (2021, 2022)
+    group by product_name, substr(`date`, 1, 7)
+)
+select t1.product_name,
+       t1.year_month,
+       t1.total_nums,
+       t2.year_month,
+       t2.total_nums
+from temp_table t1
+         join temp_table t2
+              on t1.product_name = t2.product_name and substr(t1.year_month, 1, 4) != substr(t2.year_month, 1, 4) and
+                 substr(t1.year_month, 6, 2) = substr(t2.year_month, 6, 2) and t1.year_month < t2.year_month
+order by product_name asc, t1.year_month asc;
+
+-- 38. 库存最多的商品
+
+drop table if exists product_detail_10;
+
+create table product_detail_10
+(
+    id     varchar(32) comment '商品id',
+    `date` date comment '变化时间',
+    action varchar(32) comment '补货或者售货',
+    amount int comment '补货或者售货数量'
+) comment '商品明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_detail';
+
+INSERT INTO product_detail_10
+VALUES ('1', '2021-01-01', 'supply', 2000),
+       ('1', '2021-01-03', 'sell', 1000),
+       ('1', '2021-01-05', 'supply', 3000),
+       ('2', '2021-01-01', 'supply', 7000),
+       ('2', '2021-01-01', 'supply', 1000),
+       ('2', '2021-01-04', 'sell', 8000),
+       ('3', '2021-01-01', 'supply', 4000),
+       ('4', '2021-01-01', 'supply', 3000),
+       ('4', '2021-01-03', 'supply', 1000),
+       ('5', '2021-01-01', 'supply', 2000);
+
+-- 商品明细表
+select *
+from product_detail_10;
+
+select id,
+       stock
+from (
+         select id,
+                rank() over (partition by flag order by stock desc) as ranking,
+                stock
+         from (
+                  select id,
+                         sum(`if`(action = 'supply', amount, -amount)) as stock,
+                         1                                             as flag
+                  from product_detail_10
+                  group by id
+              ) as table_temp) as table_temp
+where ranking = 1
+order by id asc;
+
+-- 39. 统计国庆前三天的每一天的最近一周的每个品类下商品收藏量和购买量，假设前三天每天的最近一周都有记录
+
+drop table if exists product_prop;
+
+create table product_prop
+(
+    id       varchar(32) comment '商品id',
+    name     varchar(32) comment '商品名字',
+    category varchar(32) comment '商品品类名'
+) comment '商品属性表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_prop';
+
+drop table if exists product_purchase;
+
+create table product_purchase
+(
+    id      varchar(32) comment '商品id',
+    user_id varchar(32) comment '购买用户id',
+    `date`  date comment '时间'
+) comment '商品购买明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_purchase';
+
+drop table if exists product_favor;
+
+create table product_favor
+(
+    id      varchar(32) comment '商品id',
+    user_id varchar(32) comment '收藏用户id',
+    `date`  date comment '时间'
+) comment '商品收藏明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/product_favor';
+
+INSERT INTO product_prop
+VALUES ('1', 'xiaomi', 'phone'),
+       ('2', 'vivo', 'phone'),
+       ('3', 'apple', 'phone'),
+       ('4', 'dami', 'food'),
+       ('5', 'kuzi', 'cloth');
+
+INSERT INTO product_purchase
+VALUES ('1', '1002', '2021-09-25'),
+       ('1', '1003', '2021-09-27'),
+       ('1', '1006', '2021-10-01'),
+       ('1', '1007', '2021-10-03'),
+       ('2', '1001', '2021-09-24'),
+       ('2', '1002', '2021-09-25'),
+       ('2', '1003', '2021-09-27'),
+       ('2', '1005', '2021-09-30'),
+       ('2', '1006', '2021-10-01'),
+       ('2', '1007', '2021-10-02'),
+       ('3', '1001', '2021-09-24'),
+       ('3', '1002', '2021-09-25'),
+       ('3', '1003', '2021-09-29'),
+       ('3', '1005', '2021-09-30'),
+       ('3', '1006', '2021-10-01'),
+       ('3', '1007', '2021-10-02'),
+       ('4', '1001', '2021-09-24'),
+       ('4', '1002', '2021-09-25'),
+       ('4', '1003', '2021-09-26'),
+       ('5', '1005', '2021-09-27'),
+       ('5', '1006', '2021-10-01'),
+       ('5', '1008', '2021-10-02'),
+       ('5', '1007', '2021-10-03');
+
+INSERT INTO product_favor
+VALUES ('1', '1001', '2021-09-24'),
+       ('1', '1002', '2021-09-25'),
+       ('1', '1003', '2021-09-26'),
+       ('1', '1005', '2021-09-30'),
+       ('1', '1006', '2021-10-01'),
+       ('1', '1007', '2021-10-03'),
+       ('2', '1001', '2021-09-24'),
+       ('2', '1002', '2021-09-25'),
+       ('2', '1003', '2021-09-26'),
+       ('2', '1005', '2021-09-30'),
+       ('2', '1006', '2021-10-01'),
+       ('2', '1007', '2021-10-02'),
+       ('3', '1001', '2021-09-24'),
+       ('3', '1002', '2021-09-25'),
+       ('3', '1003', '2021-09-26'),
+       ('3', '1005', '2021-09-30'),
+       ('3', '1006', '2021-10-01'),
+       ('3', '1007', '2021-10-02'),
+       ('4', '1001', '2021-09-24'),
+       ('4', '1002', '2021-09-25'),
+       ('4', '1003', '2021-09-26'),
+       ('5', '1005', '2021-09-27'),
+       ('5', '1006', '2021-10-01'),
+       ('5', '1007', '2021-10-03');
+
+-- 商品属性表
+select *
+from product_prop;
+
+-- 商品购买明细表
+select *
+from product_purchase;
+
+-- 商品收藏明细表
+select *
+from product_favor;
+;
+
+
+
+select temp_1.category,
+       temp_1.`date`,
+       nvl(buy_total_nums, 0) as buy_total_nums
+from (select *
+      from (select category
+            from product_prop
+            group by category) as temp_1,
+           (select date_sub('2021-10-01', 1) as `date`
+            union
+            select date_sub('2021-10-01', 2) as `date`
+            union
+            select date_sub('2021-10-01', 3) as `date`) as temp_2) as temp_1
+         left join (
+    select category,
+           `date`,
+           buy_total_nums
+    from (
+             select category,
+                    `date`,
+                    sum(buy_total_nums)
+                        over (partition by category order by `date` asc rows between 6 preceding and current row ) as buy_total_nums
+             from (
+                      select category,
+                             `date`,
+                             count(*) as buy_total_nums
+                      from product_purchase u
+                               left join product_prop r
+                                         on u.id = r.id
+                      group by category, `date`
+                  ) as temp
+         ) as table_temp
+    where `date` in (date_sub('2021-10-01', 1), date_sub('2021-10-01', 2), date_sub('2021-10-01', 3))
+    group by category, `date`, buy_total_nums
+) as temp_2
+                   on temp_1.category = temp_2.category and temp_1.`date` = temp_2.`date`;
+
+
+select *
+from product_purchase
+         left join product_prop
+order by category asc, `date` asc;
+
+-- 40. 每个商品同一时刻最多浏览人数
+--     统计每个商品同一时刻最多的在浏览人数，如果同一时刻有进入也有离开，先记录用户数增加再记录减少，按照最大的人数降序排序
+
+drop table if exists user_action_log;
+
+create table user_action_log
+(
+    user_id    varchar(32) comment '用户id',
+    id         varchar(32) comment '商品id',
+    start_time timestamp not null comment '起始时间',
+    end_time   timestamp not null comment '起始时间'
+) comment '用户行为日志表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_action_log';
+
+INSERT INTO user_action_log
+VALUES ('101', '9001', '2021-11-01 02:00:00', '2021-11-01 02:00:11'),
+       ('102', '9001', '2021-11-01 02:00:09', '2021-11-01 02:00:38'),
+       ('103', '9001', '2021-11-01 02:00:28', '2021-11-01 02:00:58'),
+       ('104', '9002', '2021-11-01 03:00:45', '2021-11-01 03:01:11'),
+       ('105', '9001', '2021-11-01 02:00:51', '2021-11-01 02:00:59'),
+       ('106', '9002', '2021-11-01 03:00:55', '2021-11-01 03:01:24'),
+       ('107', '9001', '2021-11-01 02:00:01', '2021-11-01 02:01:50');
+
+-- 用户行为日志表
+select *
+from user_action_log;
+
+with temp_table as (
+    select user_id,
+           id,
+           start_time as `time`,
+           1          as flag
+    from user_action_log
+    union all
+    select user_id,
+           id,
+           end_time as `time`,
+           -1       as flag
+    from user_action_log
+)
+select id,
+       max(total_num) as max_nums
+from (
+         select id,
+                `time`,
+                sum(flag)
+                    over (partition by id order by `time` asc rows between unbounded preceding and current row) as total_num
+         from temp_table
+     ) as table_temp
+group by id
+order by id asc;
+
+-- 41. 统计活跃间隔对用户分级结果：
+--     用户等级：-> 忠实用户：近七天活跃且非新用户
+--             -> 新晋用户：近七天新增
+--             -> 沉睡用户：近七天未活跃但在7天前活跃
+--             -> 流失用户：近30天未活跃，但在30天前活跃
+--             -> 假设今天是数据中所有日期的最大值
+
+drop table if exists user_action_log_2;
+
+create table user_action_log_2
+(
+    user_id    varchar(32) comment '用户id',
+    id         varchar(32) comment '商品id',
+    start_time timestamp not null comment '起始时间',
+    end_time   timestamp not null comment '起始时间'
+) comment '用户行为日志表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_action_log_2';
+
+INSERT INTO user_action_log_2
+VALUES ('109', ' 9001', '2021-08-31 02:00:00', '2021-08-31 02:00:09'),
+       ('109', ' 9002', '2021-11-04 03:00:55', '2021-11-04 03:00:59'),
+       ('108', ' 9001', '2021-09-01 02:00:01', '2021-09-01 02:01:50'),
+       ('108', ' 9001', '2021-11-03 02:00:01', '2021-11-03 02:01:50'),
+       ('104', ' 9001', '2021-11-02 02:00:28', '2021-11-02 02:00:50'),
+       ('104', ' 9003', '2021-09-03 03:00:45', '2021-09-03 03:00:55'),
+       ('105', ' 9003', '2021-11-03 03:00:53', '2021-11-03 03:00:59'),
+       ('102', ' 9001', '2021-10-30 02:00:00', '2021-10-30 02:00:09'),
+       ('103', ' 9001', '2021-10-21 02:00:00', '2021-10-21 02:00:09'),
+       ('101', ' 9001', '2021-10-01 02:00:00', '2021-10-01 02:00:42');
+
+-- 用户行为日志表
+select *
+from user_action_log_2;
+
+
+with temp_table as (
+    select distinct user_id,
+                    case
+                        when recent_active >= date_sub(today, 7) and first_register < date_sub(today, 7) then '忠实用户'
+                        when first_register >= date_sub(today, 7) then '新晋用户'
+                        when recent_active < date_sub(today, 7) and recent_active >= date_sub(today, 30) then '沉睡用户'
+                        else '流失用户'
+                        end as user_level
+    from (
+             select user_id,
+                    max(active_date) over (partition by user_id) as recent_active,
+                    max(active_date) over (partition by flag)    as today,
+                    min(active_date) over (partition by user_id) as first_register
+             from (
+                      select user_id,
+                             date_format(start_time, 'yyyy-MM-dd') as active_date,
+                             1                                     as flag
+                      from user_action_log_2
+                  ) as table_temp
+         ) as table_temp
+)
+select user_level,
+       round(count(user_id) / (select count(user_id) from temp_table), 2) as rate
+from temp_table
+group by user_level
+order by rate desc;
+
+-- 42. 连续签到领金币数
+--     用户每天签到可领1金币，可以累积签到天数，连续签到第3、7天分别可以额外领2和6金币，每连续7天重新累积签到天数
+--     计算从2021年7月以来每个月获得的金币数,结果按照月份、id升序排序
+
+drop table if exists user_sign;
+
+create table user_sign
+(
+    user_id    varchar(32) comment '用户id',
+    id         varchar(32) comment '商品id',
+    start_time timestamp not null comment '起始时间',
+    end_time   timestamp not null comment '起始时间',
+    sign       int comment '是否签到，1为签到，0为未签到'
+) comment '用户签到表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_sign';
+
+INSERT INTO user_sign
+VALUES ('101', '0', '2021-07-07 02:00:00', '2021-07-07 02:00:09', 1),
+       ('101', '0', '2021-07-08 02:00:00', '2021-07-08 02:00:09', 1),
+       ('101', '0', '2021-07-09 02:00:00', '2021-07-09 02:00:42', 1),
+       ('101', '0', '2021-07-10 02:00:00', '2021-07-10 02:00:09', 1),
+       ('101', '0', '2021-07-11 15:59:55', '2021-07-11 15:59:59', 1),
+       ('101', '0', '2021-07-12 02:00:28', '2021-07-12 02:00:50', 1),
+       ('101', '0', '2021-07-13 02:00:28', '2021-07-13 02:00:50', 1),
+       ('102', '0', '2021-10-01 02:00:28', '2021-10-01 02:00:50', 1),
+       ('102', '0', '2021-10-02 02:00:01', '2021-10-02 02:01:50', 1),
+       ('102', '0', '2021-10-03 03:00:55', '2021-10-03 03:00:59', 1),
+       ('102', '0', '2021-10-04 03:00:45', '2021-10-04 03:00:55', 0),
+       ('102', '0', '2021-10-05 03:00:53', '2021-10-05 03:00:59', 1),
+       ('102', '0', '2021-10-06 03:00:45', '2021-10-06 03:00:55', 1);
+
+-- 用户签到表
+select *
+from user_sign;
+
+with temp_table as (
+    select user_id,
+           date_format(start_time, 'yyyy-MM-dd') as sign_day
+    from user_sign
+    where date_format(start_time, 'yyyy-MM-dd') > '2021-07'
+      and sign = 1
+)
+select user_id,
+       date_format(sign_day, 'yyyy-MM') as year_month,
+       sum(gold_coin)                   as gold_coins
+from (
+         select user_id,
+                sign_day,
+                case
+                    when sign_flag % 7 = 3 then 3
+                    when sign_flag % 7 = 0 then 7
+                    else 1
+                    end as gold_coin
+         from (
+                  select user_id,
+                         sign_day,
+                         rank() over (partition by sub_flag order by sign_day asc) as sign_flag
+                  from (
+                           select user_id,
+                                  sign_day,
+                                  date_sub(sign_day,
+                                           rank() over (partition by user_id order by sign_day asc)) as sub_flag
+                           from temp_table
+                       ) as temp_1
+              ) as temp_2
+     ) as temp_3
+group by user_id, date_format(sign_day, 'yyyy-MM')
+order by year_month asc, user_id asc;
+
+set hive.execution.engine=mr;
+
+-- 43. 统计2021年10月每个有展示记录的退货率不大于0.5的商品各项指标
+--     商品点展比 = 点击数 ÷ 展示数
+--     加购率 = 加购数 ÷ 点击数
+--     成单率 = 付款数 ÷ 加购数
+--     退货率 = 退款数 ÷ 付款数
+--     当分母为0时，整体结果为0，结果中各项指标保留3位小数，按照商品id升序排序
+
+drop table if exists user_action_2;
+
+create table user_action_2
+(
+    user_id varchar(32) comment '用户id',
+    id      varchar(32) comment '商品id',
+    `time`  timestamp not null comment '事件时间',
+    click   int comment '点击，1为是',
+    cart    int comment '购物车，1为是',
+    payment int comment '付款，1为是',
+    refund  int comment '退货，1为是'
+) comment '用户行为统计表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/user_action_2';
+
+set hive.execution.engine=mr;
+
+set hive.execution.engine=spark;
+
+INSERT INTO user_action_2
+VALUES ('101', ' 8001', '2021-10-01 02:00:00', 0, 0, 0, 0),
+       ('102', ' 8001', '2021-10-01 02:00:00', 1, 0, 0, 0),
+       ('103', ' 8001', '2021-10-01 02:00:00', 1, 1, 0, 0),
+       ('104', ' 8001', '2021-10-02 02:00:00', 1, 1, 1, 0),
+       ('105', ' 8001', '2021-10-02 02:00:00', 1, 1, 1, 0),
+       ('101', ' 8002', '2021-10-03 02:00:00', 1, 1, 1, 0),
+       ('109', ' 8001', '2021-10-04 02:00:00', 1, 1, 1, 1);
+
+-- 用户行为统计表
+select *
+from user_action_2;
+
+select id,
+       `商品点展比`,
+       `加购率`,
+       `成单率`,
+       `退货率`
+from (
+         select id,
+                `if`(view_total = 0, 0, round(click_total / view_total, 3))        as `商品点展比`,
+                `if`(click_total = 0, 0, round(cart_total / click_total, 3))       as `加购率`,
+                `if`(cart_total = 0, 0, round(payment_total / cart_total, 3))      as `成单率`,
+                `if`(payment_total = 0, 0, round(refund_total / payment_total, 3)) as `退货率`
+         from (
+                  select id,
+                         (select count(*) from user_action_2 t2 where t2.id = t1.id) as view_total,
+                         sum(click)                                                  as click_total,
+                         sum(cart)                                                   as cart_total,
+                         sum(payment)                                                as payment_total,
+                         sum(refund)                                                 as refund_total
+                  from user_action_2 t1
+                  group by id
+              ) as temp_1
+     ) as temp_2
+where `退货率` <= 0.5
+order by id asc;
+
+-- 44. 计算2021年10月商城里面所有新用户的首单平均交易金额（客单价）和平均获客成本（保留一位小数）。
+--     订单的优惠金额 = 订单明细里的{该订单各商品单价 × 数量之和} - 订单总表里的{订单总金额}
+--     平均获客成本 = 平均优惠金额
+
+drop table if exists order_detail_10;
+
+create table order_detail_10
+(
+    order_id varchar(32) comment '订单id',
+    id       varchar(32) comment '商品id',
+    price    int comment '单价价格',
+    count    int comment '商品个数'
+) comment '订单明细表'
+    row format delimited fields terminated by ''
+        null defined as ''
+    location '/warerhouse/sdc/rds/order_detail_10';
+
+INSERT INTO order_detail_10
+VALUES ('301002', '8001', 85, 1),
+       ('301002', '8003', 180, 1),
+       ('301003', '8004', 140, 1),
+       ('301003', '8003', 180, 1),
+       ('301005', '8003', 180, 1),
+       ('301006', '8003', 180, 1);
+
+-- 订单明细表
+select *
+from order_detail_10;
+
+-- 订单表
+select *
+from order_info3;
+
+with temp_table as (
+    select order_id,
+           sum(price) as actual_total_amount
+    from order_detail_10
+    group by order_id
+)
+select user_id,
+       avg(total_amount) over (partition by flag)                       as avg_amount,
+       avg(actual_total_amount - total_amount) over (partition by flag) as avg_base
+from (select *, 1 as flag
+      from order_info3
+      where date_format(event_time, 'yyyy-MM') = '2021-10') as temp_1
+         left join temp_table
+                   on temp_1.order_id = temp_table.order_id;
+
+-- 45. 国庆期间的7日动销率和滞销率
+--      动销率：店铺中一段时间内有销量的商品占当前已上架总商品数的比例（有销量的商品/已上架总商品数）
+--      滞销率：店铺中一段时间内没有销量的商品占当前已上架总商品数的比例（没有销量的商品/已上架的总商品数量）
+--      只要当天任一店铺有任何商品的销量就输出该天的结果，及时店铺当天的动销率为0
+
+drop table if exists order_detail_11;
+
+create table order_detail_11
+(
+    order_id varchar(32) comment '订单id',
+    id       varchar(32) comment '商品id',
+    price    int comment '单价价格',
+    count    int comment '商品个数'
+) comment '订单明细表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_detail_11';
+
+drop table if exists order_info_3;
+
+create table order_info_3
+(
+    order_id     varchar(32) comment '订单id',
+    user_id      varchar(32) comment '用户id',
+    event_time   date comment '时间',
+    total_amount int comment '订单总额',
+    total_count  int comment '订单中商品个数'
+) comment '订单表'
+    row format delimited fields terminated by '\t'
+        null defined as ''
+    location '/warehouse/sdc/rds/order_info_3';
+
+INSERT INTO order_detail_11
+VALUES ('301004', '8002', 180, 1),
+       ('301005', '8002', 170, 1),
+       ('301002', '8001', 85, 1),
+       ('301002', '8003', 180, 1),
+       ('301003', '8002', 150, 1),
+       ('301003', '8003', 180, 1);
+
+INSERT INTO order_info_3
+VALUES ('301004', '102', '2021-09-30', 170, 1),
+       ('301005', '104', '2021-10-01', 160, 1),
+       ('301003', '101', '2021-10-02', 300, 2),
+       ('301002', '102', '2021-10-03', 235, 2);
+
+-- 订单明细表
+select *
+from order_detail_11;
+
+-- 明细表
+select *
+from order_info_3;
+
+with temp_table as (
+    select order_id,
+           count(distinct id) as selled_total,
+           online_total
+    from (
+             select order_id,
+                    id,
+                    count(distinct id) over (partition by flag) as online_total
+             from (
+                      select *, 1 as flag
+                      from order_detail_11
+                  ) as temp_1
+         ) as temp_3
+    group by order_id, online_total
+)
+select event_time,
+       round(selled_total / online_total, 3)     as `动销率`,
+       round(1 - selled_total / online_total, 3) as `滞销率`
+from order_info_3 o
+         left join temp_table t
+                   on o.order_id = t.order_id
+where date_format(event_time, 'yyyy-MM-dd') between '2021-10-01' and '2021-10-07'
+order by event_time asc;
