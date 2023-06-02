@@ -396,3 +396,246 @@ where date_format(in_time, 'yyyy-MM') = '2021-11'
   and artical_id != 0
 group by date_format(in_time, 'yyyy-MM-dd')
 order by human_avg_duration asc;
+
+-- 7. 2021年11月每天新用户的次日留存率
+--      保留两位小数
+--      次日留存率为当天新增的用户数中第二天又活跃了的用户数占比
+--      如果in_time进入时间和out_time离开时间跨天了，在两天里都记为该用户活跃过，结果按日期升序。
+
+drop table if exists m3_user_log;
+
+create table if not exists m3_user_log
+(
+    uid        int comment '用户id',
+    artical_id int comment '视频id',
+    in_time    timestamp comment '进入时间',
+    out_time   timestamp comment '离开时间',
+    sign_in    tinyint comment '是否签到'
+) comment '用户行为日志表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO m3_user_log(uid, artical_id, in_time, out_time, sign_in)
+VALUES (101, 0, '2021-11-01 10:00:00', '2021-11-01 10:00:42', 1),
+       (102, 9001, '2021-11-01 10:00:00', '2021-11-01 10:00:09', 0),
+       (103, 9001, '2021-11-01 10:00:01', '2021-11-01 10:01:50', 0),
+       (101, 9002, '2021-11-02 10:00:09', '2021-11-02 10:00:28', 0),
+       (103, 9002, '2021-11-02 10:00:51', '2021-11-02 10:00:59', 0),
+       (104, 9001, '2021-11-02 10:00:28', '2021-11-02 10:00:50', 0),
+       (101, 9003, '2021-11-03 11:00:55', '2021-11-03 11:01:24', 0),
+       (104, 9003, '2021-11-03 11:00:45', '2021-11-03 11:00:55', 0),
+       (105, 9003, '2021-11-03 11:00:53', '2021-11-03 11:00:59', 0),
+       (101, 9002, '2021-11-04 11:00:55', '2021-11-04 11:00:59', 0);
+
+-- 用户行为日志表
+select *
+from m3_user_log;
+
+select register_day,
+       round(count(`if`(date_format(in_time, 'yyyy-MM-dd') = register_day and flag = 1, 1, null)) /
+             count(`if`(date_format(in_time, 'yyyy-MM-dd') = register_day, 1, null)), 2) as rate
+from m3_user_log a
+         left join (
+    select uid,
+           min(ts)                                    as register_day,
+           `if`(date_sub(max(ts), 1) = min(ts), 1, 0) as flag
+    from (
+             select uid,
+                    ts,
+                    dense_rank() over (partition by uid order by ts asc) as ranking
+             from (
+                      select uid,
+                             date_format(in_time, 'yyyy-MM-dd') as ts
+                      from m3_user_log
+                      union all
+                      select uid,
+                             date_format(out_time, 'yyyy-MM-dd') as ts
+                      from m3_user_log
+                  ) as table_temp
+         ) as temp_table
+    where ranking <= 2
+    group by uid
+) as b
+                   on a.uid = b.uid
+group by register_day
+order by register_day asc;
+
+-- 8. 每天的日活数及新用户占比
+--      新用户占比 = 当天的新用户数 ÷ 当天活跃用户数（日活数）
+--      如果in_time进入时间和out_time离开时间跨天了，在两天里都记为该用户活跃过，结果按日期升序。
+
+drop table if exists m5_user_log;
+
+create table if not exists m5_user_log
+(
+    uid        int comment '用户id',
+    artical_id int comment '视频id',
+    in_time    timestamp comment '进入时间',
+    out_time   timestamp comment '离开时间',
+    sign_in    tinyint comment '是否签到'
+) comment '用户行为日志表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO m5_user_log(uid, artical_id, in_time, out_time, sign_in)
+VALUES (101, 9001, '2021-10-31 10:00:00', '2021-10-31 10:00:09', 0),
+       (102, 9001, '2021-10-31 10:00:00', '2021-10-31 10:00:09', 0),
+       (101, 0, '2021-11-01 10:00:00', '2021-11-01 10:00:42', 1),
+       (102, 9001, '2021-11-01 10:00:00', '2021-11-01 10:00:09', 0),
+       (108, 9001, '2021-11-01 10:00:01', '2021-11-01 10:01:50', 0),
+       (108, 9001, '2021-11-02 10:00:01', '2021-11-02 10:01:50', 0),
+       (104, 9001, '2021-11-02 10:00:28', '2021-11-02 10:00:50', 0),
+       (106, 9001, '2021-11-02 10:00:28', '2021-11-02 10:00:50', 0),
+       (108, 9001, '2021-11-03 10:00:01', '2021-11-03 10:01:50', 0),
+       (109, 9002, '2021-11-03 11:00:55', '2021-11-03 11:00:59', 0),
+       (104, 9003, '2021-11-03 11:00:45', '2021-11-03 11:00:55', 0),
+       (105, 9003, '2021-11-03 11:00:53', '2021-11-03 11:00:59', 0),
+       (106, 9003, '2021-11-03 11:00:45', '2021-11-03 11:00:55', 0);
+
+-- 用户行为日志表
+select *
+from m5_user_log;
+
+with temp_table as (
+    select uid, ts
+    from (
+             select uid,
+                    date_format(in_time, 'yyyy-MM-dd') as ts
+             from m5_user_log
+             union all
+             select uid,
+                    date_format(out_time, 'yyyy-MM-dd') as ts
+             from m5_user_log
+         ) as table_temp
+    group by uid, ts
+)
+select ts,
+       count(distinct a.uid)                                                     as dau,
+       round(count(`if`(register_day = ts, 1, null)) / count(distinct a.uid), 2) as rate
+from temp_table a
+         left join (
+    select uid,
+           min(ts) as register_day
+    from temp_table
+    group by uid
+) as b
+                   on a.uid = b.uid
+group by ts
+order by ts asc;
+
+-- 9. 连续签到领金币
+--      artical_id -> 文章id代表用户浏览的文章ID -> 文章id为0表示用户在非文章内容页（比如App内的列表页、活动页等）。
+--      只有artical_id为0时sign_in值才有效。
+--
+--      2021年7月7日开始 -> 用户每天签到可领1金币 -> 可累积签到天数，连续签到第3、7天分别可额外领2、6金币。
+--
+--      连续签到7天后重新累积签到天数
+--
+--      问题：
+--      计算每个用户2021年7月以来每月获得的金币数（该活动到10月底结束，11月1日开始的签到不再获得金币）。结果按月份、ID升序排序。
+--      注：如果签到记录的in_time-进入时间和out_time-离开时间跨天了，也只记作in_time对应的日期签到了。
+
+drop table if exists m6_user_log;
+
+create table if not exists m6_user_log
+(
+    uid        int comment '用户id',
+    artical_id int comment '视频id',
+    in_time    timestamp comment '进入时间',
+    out_time   timestamp comment '离开时间',
+    sign_in    tinyint comment '是否签到'
+) comment '用户行为日志表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO m6_user_log(uid, artical_id, in_time, out_time, sign_in)
+VALUES (101, 0, '2021-07-07 10:00:00', '2021-07-07 10:00:09', 1),
+       (101, 0, '2021-07-08 10:00:00', '2021-07-08 10:00:09', 1),
+       (101, 0, '2021-07-09 10:00:00', '2021-07-09 10:00:42', 1),
+       (101, 0, '2021-07-10 10:00:00', '2021-07-10 10:00:09', 1),
+       (101, 0, '2021-07-11 23:59:55', '2021-07-11 23:59:59', 1),
+       (101, 0, '2021-07-12 10:00:28', '2021-07-12 10:00:50', 1),
+       (101, 0, '2021-07-13 10:00:28', '2021-07-13 10:00:50', 1),
+       (102, 0, '2021-10-01 10:00:28', '2021-10-01 10:00:50', 1),
+       (102, 0, '2021-10-02 10:00:01', '2021-10-02 10:01:50', 1),
+       (102, 0, '2021-10-03 11:00:55', '2021-10-03 11:00:59', 1),
+       (102, 0, '2021-10-04 11:00:45', '2021-10-04 11:00:55', 0),
+       (102, 0, '2021-10-05 11:00:53', '2021-10-05 11:00:59', 1),
+       (102, 0, '2021-10-06 11:00:45', '2021-10-06 11:00:55', 1);
+
+-- 用户行为日志表
+select *
+from m6_user_log;
+
+with temp_table as (
+    select uid,
+           date_format(in_time, 'yyyy-MM-dd')                                             as ts,
+           rank() over (partition by uid order by date_format(in_time, 'yyyy-MM-dd') asc) as ranking
+    from m6_user_log
+    where sign_in = 1
+)
+select year_month,
+       uid,
+       sum(bit_nums) over (partition by uid order by year_month asc) as bit_nums
+from (
+         select date_format(ts, 'yyyy-MM') as year_month,
+                uid,
+                sum(bit_nums)              as bit_nums
+         from (
+                  select uid,
+                         ts,
+                         case (date_format(ts, 'yyyy-MM-dd') between '2021-07-07' and '2021-10-31')
+                             when ranking % 7 = 3 then 3
+                             when ranking % 7 = 0 then 7
+                             else 1
+                             end as bit_nums
+                  from temp_table
+              ) as table_temp
+         group by uid, date_format(ts, 'yyyy-MM')
+     ) as table_month
+order by year_month asc, uid asc;
+
+-- 10. 计算商城中2021年每月的GMV
+--      用户将购物车中多件商品一起下单时，订单总表会生成一个订单（此时为待付款，status订单状态为0）
+--      用户支付完成，status状态为1，表示已付款
+--      用户退款完成，status状态为2，表示已退款。 -> 同时，订单总表生成一条交易总金额为负值的记录
+--      计算商城中2021年每月的GMV，输出GMV大于10W的每月GMV，值保留整数
+--      GMV为已付款订单和未付款订单两者之和，结果按GMV升序排序
+
+drop table if exists n1_order_overall;
+
+create table if not exists n1_order_overall
+(
+    order_id     int comment '订单号',
+    uid          int comment '用户id',
+    event_time   timestamp comment '下单时间',
+    total_amount decimal comment '订单总金额',
+    total_cnt    int comment '订单商品总件数',
+    status       tinyint comment '订单状态'
+) comment '订单总表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO n1_order_overall(order_id, uid, event_time, total_amount, total_cnt, `status`)
+VALUES (301001, 101, '2021-10-01 10:00:00', 15900, 2, 1),
+       (301002, 101, '2021-10-01 11:00:00', 15900, 2, 1),
+       (301003, 102, '2021-10-02 10:00:00', 34500, 8, 0),
+       (301004, 103, '2021-10-12 10:00:00', 43500, 9, 1),
+       (301005, 105, '2021-11-01 10:00:00', 31900, 7, 1),
+       (301006, 102, '2021-11-02 10:00:00', 24500, 6, 1),
+       (391007, 102, '2021-11-03 10:00:00', -24500, 6, 2),
+       (301008, 104, '2021-11-04 10:00:00', 55500, 12, 0);
+
+-- 订单总表
+select *
+from n1_order_overall;
+
+select date_format(event_time, 'yyyy-MM') as year_month,
+       sum(total_amount)                  as GMV
+from n1_order_overall
+where date_format(event_time, 'yyyy') = '2021'
+  and status != 2
+group by date_format(event_time, 'yyyy-MM')
+order by GMV asc;
+
+-- 11.
