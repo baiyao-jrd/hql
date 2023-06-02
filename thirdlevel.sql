@@ -636,6 +636,333 @@ from n1_order_overall
 where date_format(event_time, 'yyyy') = '2021'
   and status != 2
 group by date_format(event_time, 'yyyy-MM')
+having GMV > 100000
 order by GMV asc;
 
--- 11.
+-- 11. 某店铺的各商品毛利率以及店铺的整体毛利率
+--      计算2021年10月以来店铺中商品毛利率大于24.9%的商品信息以及店铺整体毛利率。
+--      商品毛利率 = （1 - 进价 / 平均单件售价） * 100 %
+--      店铺毛利率=(1-总进价成本/总销售收入)*100%
+--      结果先输出店铺毛利率，再按照商品id升序输出各商品毛利率，均保留1位小数。
+
+drop table if exists n3_order_overall;
+
+drop table if exists n4_product_info;
+
+drop table if exists n5_order_detail;
+
+create table if not exists n3_order_overall
+(
+    order_id     int comment '订单号',
+    uid          int comment '用户id',
+    event_time   timestamp comment '下单时间',
+    total_amount decimal comment '订单总金额',
+    total_cnt    int comment '订单商品总件数',
+    status       tinyint comment '订单状态'
+) comment '订单总表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists n4_product_info
+(
+    product_id   int comment '商品id',
+    shop_id      int comment '店铺id',
+    tag          string comment '商品类别标签',
+    in_price     decimal comment '进货价格',
+    quantity     int comment '进货数量',
+    release_time timestamp comment '上架时间'
+) comment '商品信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists n5_order_detail
+(
+    order_id   int comment '订单号',
+    product_id int comment '商品id',
+    price      decimal comment '商品单价',
+    cnt        int comment '下单数量'
+) comment '订单明细表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+
+INSERT INTO n3_order_overall(order_id, uid, event_time, total_amount, total_cnt,
+                             `status`)
+VALUES (301001, 101, '2021-10-01 10:00:00', 30000, 3, 1),
+       (301002, 102, '2021-10-01 11:00:00', 23900, 2, 1),
+       (301003, 103, '2021-10-02 10:00:00', 31000, 2, 1);
+
+INSERT INTO n4_product_info(product_id, shop_id, tag, in_price, quantity, release_time)
+VALUES (8001, 901, '家电', 6000, 100, '2020-01-01 10:00:00'),
+       (8002, 902, '家电', 12000, 50, '2020-01-01 10:00:00'),
+       (8003, 901, '3C数码', 12000, 50, '2020-01-01 10:00:00');
+
+INSERT INTO n5_order_detail(order_id, product_id, price, cnt)
+VALUES (301001, 8001, 8500, 2),
+       (301001, 8002, 15000, 1),
+       (301002, 8001, 8500, 1),
+       (301002, 8002, 16000, 1),
+       (301003, 8002, 14000, 1),
+       (301003, 8003, 18000, 1);
+
+-- 订单总表
+select *
+from n3_order_overall;
+
+-- 商品信息表
+select *
+from n4_product_info;
+
+-- 订单明细表
+select *
+from n5_order_detail;
+
+with temp_table as (
+    select n3.order_id,
+           total_amount,
+           total_cnt,
+           n5.product_id,
+           shop_id,
+           in_price,
+           price,
+           cnt
+    from n3_order_overall n3
+             left join n5_order_detail n5 on n3.order_id = n5.order_id
+             left join n4_product_info n4 on n4.product_id = n5.product_id
+    where shop_id = 901
+)
+select shop901_gross_margin,
+       product_id,
+       product_gross_margin
+from (
+         select product_id, round((1 - max(in_price) / avg(price)) * 100, 1) as product_gross_margin
+         from temp_table
+         group by product_id
+     ) as a,
+     (
+         select round((1 - sum(in_price * cnt) / sum(`if`(shop_id = 901, price * cnt, 0))) * 100,
+                      1) as shop901_gross_margin
+         from temp_table
+     ) as b
+order by product_id asc;
+
+-- 12. 零食类商品中复购率top3高的商品
+--      复购率指用户在一段时间内对某商品的重复购买比例，复购率越大，则反映出消费者对品牌的忠诚度就越高，也叫回头率。
+--      某商品的复购率 = 近90天内购买它至少两次的人数 ÷ 购买它的总人数
+--      近90天指包含最大日期(记为当天)在内的近90天.结果中复购率保留3位小数,并按照复购率倒序、商品id升序排序
+
+drop table if exists n6_product_info;
+
+drop table if exists n7_order_overall;
+
+drop table if exists n8_order_detail;
+
+create table if not exists n7_order_overall
+(
+    order_id     int comment '订单号',
+    uid          int comment '用户id',
+    event_time   timestamp comment '下单时间',
+    total_amount decimal comment '订单总金额',
+    total_cnt    int comment '订单商品总件数',
+    status       tinyint comment '订单状态'
+) comment '订单总表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists n6_product_info
+(
+    product_id   int comment '商品id',
+    shop_id      int comment '店铺id',
+    tag          string comment '商品类别标签',
+    in_price     decimal comment '进货价格',
+    quantity     int comment '进货数量',
+    release_time timestamp comment '上架时间'
+) comment '商品信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists n8_order_detail
+(
+    order_id   int comment '订单号',
+    product_id int comment '商品id',
+    price      decimal comment '商品单价',
+    cnt        int comment '下单数量'
+) comment '订单明细表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO n6_product_info(product_id, shop_id, tag, in_price, quantity, release_time)
+VALUES (8001, 901, '零食', 60, 1000, '2020-01-01 10:00:00'),
+       (8002, 901, '零食', 140, 500, '2020-01-01 10:00:00'),
+       (8003, 901, '零食', 160, 500, '2020-01-01 10:00:00');
+
+INSERT INTO n7_order_overall(order_id, uid, event_time, total_amount, total_cnt,
+                             `status`)
+VALUES (301001, 101, '2021-09-30 10:00:00', 140, 1, 1),
+       (301002, 102, '2021-10-01 11:00:00', 235, 2, 1),
+       (301011, 102, '2021-10-31 11:00:00', 250, 2, 1),
+       (301003, 101, '2021-11-02 10:00:00', 300, 2, 1),
+       (301013, 105, '2021-11-02 10:00:00', 300, 2, 1),
+       (301005, 104, '2021-11-03 10:00:00', 170, 1, 1);
+
+INSERT INTO n8_order_detail(order_id, product_id, price, cnt)
+VALUES (301001, 8002, 150, 1),
+       (301011, 8003, 200, 1),
+       (301011, 8001, 80, 1),
+       (301002, 8001, 85, 1),
+       (301002, 8003, 180, 1),
+       (301003, 8002, 140, 1),
+       (301003, 8003, 180, 1),
+       (301013, 8002, 140, 2),
+       (301005, 8003, 180, 1);
+
+-- 商品信息表
+select *
+from n6_product_info;
+
+-- 订单总表
+select *
+from n7_order_overall;
+
+-- 订单明细表
+select *
+from n8_order_detail;
+
+with temp_table as (
+    select n8.product_id,
+           date_format(event_time, 'yyyy-MM-dd') as event_time,
+           uid
+    from n7_order_overall n7
+             left join n8_order_detail n8
+                       on n7.order_id = n8.order_id
+             left join n6_product_info n6
+                       on n6.product_id = n8.product_id
+    where date_format(event_time, 'yyyy-MM-dd') >=
+          date_sub((select date_format(max(event_time), 'yyyy-MM-dd') from n7_order_overall), 89)
+      and tag = '零食'
+)
+select temp_1.product_id,
+       round(repurchase_cnt / purchase_cnt, 3) as repurchase_rate
+from (select product_id,
+             count(distinct uid) as purchase_cnt
+      from temp_table
+      group by product_id) as temp_1
+         left join (
+    select product_id,
+           count(uid) as repurchase_cnt
+    from (select product_id, uid
+          from temp_table
+          group by product_id, uid
+          having count(distinct event_time) >= 2) as table_temp
+    group by product_id
+) as temp_2
+                   on temp_1.product_id = temp_2.product_id
+order by repurchase_rate desc, product_id desc;
+
+-- 13. 2021年国庆在北京接单3次及以上的司机
+--      请统计2021年国庆7天期间在北京市接单至少3次的司机的平均接单数和平均兼职收入（暂不考虑平台佣金，直接计算完成的订单费用总额）结果保留三位小数
+--
+--      用户提交打车请求后，用户打车记录表生成一条打车记录 -> order_id订单号为null
+--      司机接单后，打车订单表生成一条订单 -> 填充order_time接单时间及其左边的字段
+--          start_time -> 开始计费的上车时间及其右边的字段全部为null
+--          order_id订单号 & order_time接单时间(打车结束时间) -> 写入打车记录表
+--      若一直无司机接单，超时或者中途用户主动取消打车 -> 则记录end_time打车结束时间
+
+--      乘客上车前 -> 乘客或司机点击取消订单 -> 将打车订单表对应订单的 finish_time 订单完成时间 -> 填充为取消时间，其余字段设为null
+
+--      司机接上乘客时 -> 填充订单表中 start_time 开始计费的上车时间
+
+--      订单完成时 -> 填充订单完成时间、里程数、费用 -> 评分为null -> 在用户给司机打1~5星评价后填充
+
+drop table if exists p1_get_car_record;
+
+drop table if exists p2_get_car_order;
+
+create table if not exists p1_get_car_record
+(
+    uid        int comment '用户id',
+    city       string comment '城市',
+    event_time timestamp comment '打车时间',
+    end_time   timestamp comment '打车结束时间',
+    order_id   timestamp comment '订单号'
+) comment '用户打车记录表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists p2_get_car_order
+(
+    order_id    int comment '订单号id',
+    uid         int comment '用户id',
+    driver_id   int comment '司机id',
+    order_time  timestamp comment '接单时间',
+    start_time  timestamp comment '开始计费的上车时间',
+    finish_time timestamp comment '订单结束时间',
+    mileage     double comment '行驶里程数',
+    fare        double comment '费用',
+    grade       tinyint comment '评分'
+) comment '打车订单表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO p1_get_car_record(uid, city, event_time, end_time, order_id)
+VALUES (101, '北京', '2021-10-01 07:00:00', '2021-10-01 07:02:00', null),
+       (102, '北京', '2021-10-01 09:00:30', '2021-10-01 09:01:00', 9001),
+       (101, '北京', '2021-10-01 08:28:10', '2021-10-01 08:30:00', 9002),
+       (103, '北京', '2021-10-02 07:59:00', '2021-10-02 08:01:00', 9003),
+       (104, '北京', '2021-10-03 07:59:20', '2021-10-03 08:01:00', 9004),
+       (105, '北京', '2021-10-01 08:00:00', '2021-10-01 08:02:10', 9005),
+       (106, '北京', '2021-10-01 17:58:00', '2021-10-01 18:01:00', 9006),
+       (107, '北京', '2021-10-02 11:00:00', '2021-10-02 11:01:00', 9007),
+       (108, '北京', '2021-10-02 21:00:00', '2021-10-02 21:01:00', 9008);
+
+INSERT INTO p2_get_car_order(order_id, uid, driver_id, order_time, start_time,
+                             finish_time, mileage, fare, grade)
+VALUES ( 9002, 101, 201, '2021-10-01 08:30:00', null, '2021-10-01 08:31:00', null, null
+       , null),
+       (9001, 102, 202, '2021-10-01 09:01:00', '2021-10-01 09:06:00', '2021-10-01 09:
+31:00', 10.0, 41.5, 5),
+       (9003, 103, 202, '2021-10-02 08:01:00', '2021-10-02 08:15:00', '2021-10-02 08:
+31:00', 11.0, 41.5, 4),
+       (9004, 104, 202, '2021-10-03 08:01:00', '2021-10-03 08:13:00', '2021-10-03 08:
+31:00', 7.5, 22, 4),
+       (9005, 105, 203, '2021-10-01 08:02:10', '2021-10-01 08:18:00', '2021-10-01 08:
+31:00', 15.0, 44, 5),
+       (9006, 106, 203, '2021-10-01 18:01:00', '2021-10-01 18:09:00', '2021-10-01 18:
+31:00', 8.0, 25, 5),
+       (9007, 107, 203, '2021-10-02 11:01:00', '2021-10-02 11:07:00', '2021-10-02 11:
+31:00', 9.9, 30, 5),
+       (9008, 108, 203, '2021-10-02 21:01:00', '2021-10-02 21:10:00', '2021-10-02 21:
+31:00', 13.2, 38, 4);
+
+-- 用户打车记录表
+select *
+from p1_get_car_record;
+
+-- 打车订单表
+select *
+from p2_get_car_order;
+
+with temp_table as (
+    select driver_id,
+           date_format(order_time, 'yyyy-MM-dd') as order_time,
+           fare
+    from p2_get_car_order p2
+    where date_format(order_time, 'yyyy-MM-dd') between '2021-10-01' and '2021-10-07'
+      and driver_id in (
+        select driver_id
+        from p2_get_car_order
+        group by driver_id
+        having count(*) >= 3
+    )
+)
+select round(avg(orders_cnt), 3) as avg_orders_cnt,
+       round(avg(fare_total), 3) as avg_fare_total
+from (
+         select driver_id,
+                count(*)                             as orders_cnt,
+                sum(`if`(fare is not null, fare, 0)) as fare_total
+         from temp_table
+         group by driver_id
+     ) as table_temp;
+
+-- 14.
