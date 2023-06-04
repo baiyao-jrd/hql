@@ -1618,7 +1618,7 @@ VALUES ('2021-11-6', 10, 'B004', 1, 150);
 select *
 from q2_product_tb;
 
-select sum(sales_price) as sales_total,
+select sum(sales_price)                                     as sales_total,
        round(sum(sales_price) / count(distinct user_id), 2) as sales_per_user
 from q2_product_tb
 where date_format(sales_date, 'yyyy-MM') = '2021-11';
@@ -1631,50 +1631,76 @@ drop table if exists q3_product_tb;
 
 drop table if exists q4_sales_tb;
 
-create table if not exists q3_product_tb (
-    item_id string comment '',
-    style_id string comment '',
+create table if not exists q3_product_tb
+(
+    item_id   string comment '',
+    style_id  string comment '',
     tag_price int comment '',
     inventory int comment ''
 ) comment '产品情况表'
-row format delimited fields terminated by ','
-stored as textfile ;
+    row format delimited fields terminated by ','
+    stored as textfile;
 
-create table if not exists q4_sales_tb (
-    sales_date date comment '',
-    user_id int comment '',
-    item_id string comment '',
-    sales_num int comment '',
+create table if not exists q4_sales_tb
+(
+    sales_date  date comment '',
+    user_id     int comment '',
+    item_id     string comment '',
+    sales_num   int comment '',
     sales_price int comment ''
 ) comment '销售数据表'
-row format delimited fields terminated by ','
-stored as textfile ;
+    row format delimited fields terminated by ','
+    stored as textfile;
 
-INSERT INTO q3_product_tb VALUES('A001', 'A', 100, 20);
-INSERT INTO q3_product_tb VALUES('A002', 'A', 120, 30);
-INSERT INTO q3_product_tb VALUES('A003', 'A', 200, 15);
-INSERT INTO q3_product_tb VALUES('B001', 'B', 130, 18);
-INSERT INTO q3_product_tb VALUES('B002', 'B', 150, 22);
-INSERT INTO q3_product_tb VALUES('B003', 'B', 125, 10);
-INSERT INTO q3_product_tb VALUES('B004', 'B', 155, 12);
-INSERT INTO q3_product_tb VALUES('C001', 'C', 260, 25);
-INSERT INTO q3_product_tb VALUES('C002', 'C', 280, 18);
+INSERT INTO q3_product_tb
+VALUES ('A001', 'A', 100, 20);
+INSERT INTO q3_product_tb
+VALUES ('A002', 'A', 120, 30);
+INSERT INTO q3_product_tb
+VALUES ('A003', 'A', 200, 15);
+INSERT INTO q3_product_tb
+VALUES ('B001', 'B', 130, 18);
+INSERT INTO q3_product_tb
+VALUES ('B002', 'B', 150, 22);
+INSERT INTO q3_product_tb
+VALUES ('B003', 'B', 125, 10);
+INSERT INTO q3_product_tb
+VALUES ('B004', 'B', 155, 12);
+INSERT INTO q3_product_tb
+VALUES ('C001', 'C', 260, 25);
+INSERT INTO q3_product_tb
+VALUES ('C002', 'C', 280, 18);
 
-INSERT INTO q4_sales_tb VALUES('2021-11-1', 1, 'A001', 1, 90);
-INSERT INTO q4_sales_tb VALUES('2021-11-1', 2, 'A002', 2, 220);
-INSERT INTO q4_sales_tb VALUES('2021-11-1', 2, 'B001', 1, 120);
-INSERT INTO q4_sales_tb VALUES('2021-11-2', 3, 'C001', 2, 500);
-INSERT INTO q4_sales_tb VALUES('2021-11-2', 4, 'B001', 1, 120);
-INSERT INTO q4_sales_tb VALUES('2021-11-3', 5, 'C001', 1, 240);
-INSERT INTO q4_sales_tb VALUES('2021-11-3', 6, 'C002', 1, 270);
-INSERT INTO q4_sales_tb VALUES('2021-11-4', 7, 'A003', 1, 180);
-INSERT INTO q4_sales_tb VALUES('2021-11-4', 8, 'B002', 1, 140);
-INSERT INTO q4_sales_tb VALUES('2021-11-4', 9, 'B001', 1, 125);
-INSERT INTO q4_sales_tb VALUES('2021-11-5', 10, 'B003', 1, 120);
-INSERT INTO q4_sales_tb VALUES('2021-11-5', 10, 'B004', 1, 150);
-INSERT INTO q4_sales_tb VALUES('2021-11-5', 10, 'A003', 1, 180);
-INSERT INTO q4_sales_tb VALUES('2021-11-6', 11, 'B003', 1, 120);
-INSERT INTO q4_sales_tb VALUES('2021-11-6', 10, 'B004', 1, 150);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-1', 1, 'A001', 1, 90);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-1', 2, 'A002', 2, 220);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-1', 2, 'B001', 1, 120);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-2', 3, 'C001', 2, 500);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-2', 4, 'B001', 1, 120);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-3', 5, 'C001', 1, 240);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-3', 6, 'C002', 1, 270);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-4', 7, 'A003', 1, 180);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-4', 8, 'B002', 1, 140);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-4', 9, 'B001', 1, 125);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-5', 10, 'B003', 1, 120);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-5', 10, 'B004', 1, 150);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-5', 10, 'A003', 1, 180);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-6', 11, 'B003', 1, 120);
+INSERT INTO q4_sales_tb
+VALUES ('2021-11-6', 10, 'B004', 1, 150);
 
 -- 产品情况表
 select *
@@ -1686,5 +1712,920 @@ from q4_sales_tb;
 
 select round(sum(sales_price) / sum(tag_price * sales_num) * 100, 2) as discount_rate
 from q4_sales_tb q4
-left join q3_product_tb q3
-on q4.item_id = q3.item_id;
+         left join q3_product_tb q3
+                   on q4.item_id = q3.item_id;
+
+-- 22. 某宝店铺动销率与售罄率
+--      统计每款的动销率与售罄率 -> 按style_id升序
+--      动销率 -> pin_rate -> 有销售的数量 / 在售sku数量
+--      售罄率 -> sellThrough_rate -> GMV / 备货值
+--      备货值 -> 吊牌价 * 库存数
+
+set hive.execution.engine = mr;
+
+set hive.execution.engine = spark;
+
+drop table if exists q5_product_tb;
+
+drop table if exists q6_sales_tb;
+
+create table if not exists q5_product_tb
+(
+    item_id   string comment '',
+    style_id  string comment '',
+    tag_price int comment '',
+    inventory int comment ''
+) comment '产品情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists q6_sales_tb
+(
+    sales_date  date comment '',
+    user_id     int comment '',
+    item_id     string comment '',
+    sales_num   int comment '',
+    sales_price int comment ''
+) comment '销售数据报表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO q5_product_tb
+VALUES ('A001', 'A', 100, 20);
+INSERT INTO q5_product_tb
+VALUES ('A002', 'A', 120, 30);
+INSERT INTO q5_product_tb
+VALUES ('A003', 'A', 200, 15);
+INSERT INTO q5_product_tb
+VALUES ('B001', 'B', 130, 18);
+INSERT INTO q5_product_tb
+VALUES ('B002', 'B', 150, 22);
+INSERT INTO q5_product_tb
+VALUES ('B003', 'B', 125, 10);
+INSERT INTO q5_product_tb
+VALUES ('B004', 'B', 155, 12);
+INSERT INTO q5_product_tb
+VALUES ('C001', 'C', 260, 25);
+INSERT INTO q5_product_tb
+VALUES ('C002', 'C', 280, 18);
+
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-1', 1, 'A001', 1, 90);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-1', 2, 'A002', 2, 220);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-1', 2, 'B001', 1, 120);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-2', 3, 'C001', 2, 500);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-2', 4, 'B001', 1, 120);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-3', 5, 'C001', 1, 240);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-3', 6, 'C002', 1, 270);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-4', 7, 'A003', 1, 180);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-4', 8, 'B002', 1, 140);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-4', 9, 'B001', 1, 125);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-5', 10, 'B003', 1, 120);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-5', 10, 'B004', 1, 150);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-5', 10, 'A003', 1, 180);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-6', 11, 'B003', 1, 120);
+INSERT INTO q6_sales_tb
+VALUES ('2021-11-6', 10, 'B004', 1, 150);
+
+-- 产品情况表
+select *
+from q5_product_tb;
+
+-- 销售数据表
+select *
+from q6_sales_tb;
+
+with a as (
+    select style_id,
+           sum(inventory)             as pre_online_nums,
+           sum(tag_price * inventory) as inventory_value
+    from q5_product_tb
+    group by style_id
+)
+select style_id,
+       round(sum(sales_num) / ((select pre_online_nums from a where a.style_id = q5.style_id) - sum(sales_num)) * 100,
+             2) as pin_rate,
+       round(sum(sales_price) / (select inventory_value from a where a.style_id = q5.style_id) * 100,
+             2) as sellThrough_rate
+from q5_product_tb q5
+         left join q6_sales_tb q6
+                   on q5.item_id = q6.item_id
+group by style_id
+order by style_id asc;
+
+-- 23. 某宝店铺连续两天及以上购物的用户及其对应的天数
+--      请统计连续2天及以上在该店铺购物的用户及其对应的次数
+--      若有多个用户，按user_id升序
+
+drop table if exists q7_sales_tb;
+
+create table if not exists q7_sales_tb
+(
+    sales_date  date comment '',
+    user_id     int comment '',
+    item_id     string comment '',
+    sales_num   int comment '',
+    sales_price int comment ''
+) comment '销售数据表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-1', 1, 'A001', 1, 90);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-1', 2, 'A002', 2, 220);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-1', 2, 'B001', 1, 120);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-2', 3, 'C001', 2, 500);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-2', 4, 'B001', 1, 120);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-3', 5, 'C001', 1, 240);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-3', 6, 'C002', 1, 270);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-4', 7, 'A003', 1, 180);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-4', 8, 'B002', 1, 140);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-4', 9, 'B001', 1, 125);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-5', 10, 'B003', 1, 120);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-5', 10, 'B004', 1, 150);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-5', 10, 'A003', 1, 180);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-6', 11, 'B003', 1, 120);
+INSERT INTO q7_sales_tb
+VALUES ('2021-11-6', 10, 'B004', 1, 150);
+
+-- 销售数据表
+select *
+from q7_sales_tb;
+
+select user_id,
+       count(date_sub(sales_date, ranking)) as cnt
+from (
+         select user_id,
+                sales_date,
+                rank() over (partition by user_id order by sales_date asc) ranking
+         from (
+                  select sales_date,
+                         user_id
+                  from q7_sales_tb
+                  group by sales_date, user_id
+              ) as a
+     ) as b
+group by user_id
+having count(date_sub(sales_date, ranking)) >= 2
+order by user_id asc;
+
+-- 24. 牛客直播转换率
+--      统计每个科目的转换率 -> sign_rate(%) -> 报名人数 / 浏览人数
+--      结果保留两位小数，按course_id升序
+
+drop table if exists r1_course_tb;
+
+drop table if exists r2_behavior_tb;
+
+create table if not exists r1_course_tb
+(
+    course_id       int comment '',
+    course_name     string comment '',
+    course_datetime string comment ''
+) comment '课程表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r2_behavior_tb
+(
+    user_id   int comment '',
+    if_vw     int comment '',
+    if_fav    int comment '',
+    if_sign   int comment '',
+    course_id int comment ''
+) comment '用户行为表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO r1_course_tb
+VALUES (1, 'Python', '2021-12-1 19:00-21:00');
+INSERT INTO r1_course_tb
+VALUES (2, 'SQL', '2021-12-2 19:00-21:00');
+INSERT INTO r1_course_tb
+VALUES (3, 'R', '2021-12-3 19:00-21:00');
+
+INSERT INTO r2_behavior_tb
+VALUES (100, 1, 1, 1, 1);
+INSERT INTO r2_behavior_tb
+VALUES (100, 1, 1, 1, 2);
+INSERT INTO r2_behavior_tb
+VALUES (100, 1, 1, 1, 3);
+INSERT INTO r2_behavior_tb
+VALUES (101, 1, 1, 1, 1);
+INSERT INTO r2_behavior_tb
+VALUES (101, 1, 1, 1, 2);
+INSERT INTO r2_behavior_tb
+VALUES (101, 1, 0, 0, 3);
+INSERT INTO r2_behavior_tb
+VALUES (102, 1, 1, 1, 1);
+INSERT INTO r2_behavior_tb
+VALUES (102, 1, 1, 1, 2);
+INSERT INTO r2_behavior_tb
+VALUES (102, 1, 1, 1, 3);
+INSERT INTO r2_behavior_tb
+VALUES (103, 1, 1, 0, 1);
+INSERT INTO r2_behavior_tb
+VALUES (103, 1, 0, 0, 2);
+INSERT INTO r2_behavior_tb
+VALUES (103, 1, 0, 0, 3);
+INSERT INTO r2_behavior_tb
+VALUES (104, 1, 1, 1, 1);
+INSERT INTO r2_behavior_tb
+VALUES (104, 1, 1, 1, 2);
+INSERT INTO r2_behavior_tb
+VALUES (104, 1, 1, 0, 3);
+INSERT INTO r2_behavior_tb
+VALUES (105, 1, 0, 0, 1);
+INSERT INTO r2_behavior_tb
+VALUES (106, 1, 0, 0, 1);
+INSERT INTO r2_behavior_tb
+VALUES (107, 1, 0, 0, 1);
+INSERT INTO r2_behavior_tb
+VALUES (107, 1, 1, 1, 2);
+INSERT INTO r2_behavior_tb
+VALUES (108, 1, 1, 1, 3);
+
+-- 课程表
+select *
+from r1_course_tb;
+
+-- 用户行为表
+select *
+from r2_behavior_tb;
+
+select r2.course_id,
+       course_name,
+       round(sum(if_sign) / sum(if_vw) * 100, 2) as sign_rate
+from r2_behavior_tb r2
+         left join r1_course_tb r1
+                   on r2.course_id = r1.course_id
+group by course_name, r2.course_id
+order by r2.course_id asc;
+
+-- 25. 牛客直播开始时各直播间在线人数
+--      统计直播开始时(19:00)，各科目的在线人数 -> 按course_id升序
+
+drop table if exists r3_course_tb;
+
+drop table if exists r4_attend_tb;
+
+create table if not exists r3_course_tb
+(
+    course_id       int comment '',
+    course_name     string comment '',
+    course_datetime string comment ''
+) comment '课程表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r4_attend_tb
+(
+    user_id      int comment '',
+    course_id    int comment '',
+    in_datetime  timestamp comment '',
+    out_datetime timestamp comment ''
+) comment '上课情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO r3_course_tb
+VALUES (1, 'Python', '2021-12-1 19:00-21:00');
+INSERT INTO r3_course_tb
+VALUES (2, 'SQL', '2021-12-2 19:00-21:00');
+INSERT INTO r3_course_tb
+VALUES (3, 'R', '2021-12-3 19:00-21:00');
+
+INSERT INTO r4_attend_tb
+VALUES (100, 1, '2021-12-1 19:00:00', '2021-12-1 19:28:00');
+INSERT INTO r4_attend_tb
+VALUES (100, 1, '2021-12-1 19:30:00', '2021-12-1 19:53:00');
+INSERT INTO r4_attend_tb
+VALUES (101, 1, '2021-12-1 19:00:00', '2021-12-1 20:55:00');
+INSERT INTO r4_attend_tb
+VALUES (102, 1, '2021-12-1 19:00:00', '2021-12-1 19:05:00');
+INSERT INTO r4_attend_tb
+VALUES (104, 1, '2021-12-1 19:00:00', '2021-12-1 20:59:00');
+INSERT INTO r4_attend_tb
+VALUES (101, 2, '2021-12-2 19:05:00', '2021-12-2 20:58:00');
+INSERT INTO r4_attend_tb
+VALUES (102, 2, '2021-12-2 18:55:00', '2021-12-2 21:00:00');
+INSERT INTO r4_attend_tb
+VALUES (104, 2, '2021-12-2 18:57:00', '2021-12-2 20:56:00');
+INSERT INTO r4_attend_tb
+VALUES (107, 2, '2021-12-2 19:10:00', '2021-12-2 19:18:00');
+INSERT INTO r4_attend_tb
+VALUES (100, 3, '2021-12-3 19:01:00', '2021-12-3 21:00:00');
+INSERT INTO r4_attend_tb
+VALUES (102, 3, '2021-12-3 18:58:00', '2021-12-3 19:05:00');
+INSERT INTO r4_attend_tb
+VALUES (108, 3, '2021-12-3 19:01:00', '2021-12-3 19:56:00');
+
+-- 课程表
+select *
+from r3_course_tb;
+
+-- 上课情况表
+select *
+from r4_attend_tb;
+
+with a as (
+    select r4.course_id,
+           course_name,
+           date_format(in_datetime, 'HH:mm:ss')  as in_datetime,
+           date_format(out_datetime, 'HH:mm:ss') as out_datetime
+    from r4_attend_tb r4
+             left join r3_course_tb r3
+                       on r4.course_id = r3.course_id
+),
+     b as (
+         select course_id,
+                course_name,
+                in_datetime as date_time,
+                1           as flag
+         from a
+         union all
+         select course_id,
+                course_name,
+                out_datetime as date_time,
+                -1           as flag
+         from a
+     )
+select course_id,
+       course_name,
+       total
+from (
+         select course_id,
+                course_name,
+                date_time,
+                sum(total)
+                    over (partition by course_id, course_name order by date_time asc rows between unbounded preceding and current row ) as total,
+                lead(date_time, 1, '24:00:00')
+                     over (partition by course_id, course_name order by date_time asc)                                                  as next_date_time
+         from (
+                  select course_id,
+                         course_name,
+                         date_time,
+                         sum(flag) as total
+                  from b
+                  group by course_id, course_name, date_time
+              ) as temp_1
+     ) as temp_2
+where '19:00:00' between date_time and next_date_time
+order by course_id asc;
+
+-- 26. 牛客直播各科目平均观看时长
+--      观看时长 -> 离开直播间的时间与进入直播间的时间只差 -> 单位是min
+--      按平均观看时长降序，结果保留两位小数
+
+drop table if exists r5_course_tb;
+
+drop table if exists r6_attend_tb;
+
+create table if not exists r5_course_tb
+(
+    course_id       int comment '',
+    course_name     string comment '',
+    course_datetime string comment ''
+) comment '课程表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r6_attend_tb
+(
+    user_id      int comment '',
+    course_id    int comment '',
+    in_datetime  timestamp comment '',
+    out_datetime timestamp comment ''
+) comment '上课情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO r5_course_tb
+VALUES (1, 'Python', '2021-12-1 19:00-21:00');
+INSERT INTO r5_course_tb
+VALUES (2, 'SQL', '2021-12-2 19:00-21:00');
+INSERT INTO r5_course_tb
+VALUES (3, 'R', '2021-12-3 19:00-21:00');
+
+INSERT INTO r6_attend_tb
+VALUES (100, 1, '2021-12-1 19:00:00', '2021-12-1 19:28:00');
+INSERT INTO r6_attend_tb
+VALUES (100, 1, '2021-12-1 19:30:00', '2021-12-1 19:53:00');
+INSERT INTO r6_attend_tb
+VALUES (101, 1, '2021-12-1 19:00:00', '2021-12-1 20:55:00');
+INSERT INTO r6_attend_tb
+VALUES (102, 1, '2021-12-1 19:00:00', '2021-12-1 19:05:00');
+INSERT INTO r6_attend_tb
+VALUES (104, 1, '2021-12-1 19:00:00', '2021-12-1 20:59:00');
+INSERT INTO r6_attend_tb
+VALUES (101, 2, '2021-12-2 19:05:00', '2021-12-2 20:58:00');
+INSERT INTO r6_attend_tb
+VALUES (102, 2, '2021-12-2 18:55:00', '2021-12-2 21:00:00');
+INSERT INTO r6_attend_tb
+VALUES (104, 2, '2021-12-2 18:57:00', '2021-12-2 20:56:00');
+INSERT INTO r6_attend_tb
+VALUES (107, 2, '2021-12-2 19:10:00', '2021-12-2 19:18:00');
+INSERT INTO r6_attend_tb
+VALUES (100, 3, '2021-12-3 19:01:00', '2021-12-3 21:00:00');
+INSERT INTO r6_attend_tb
+VALUES (102, 3, '2021-12-3 18:58:00', '2021-12-3 19:05:00');
+INSERT INTO r6_attend_tb
+VALUES (108, 3, '2021-12-3 19:01:00', '2021-12-3 19:56:00');
+
+-- 课程表
+select *
+from r5_course_tb;
+
+-- 上课情况表
+select *
+from r6_attend_tb;
+
+select r6.course_id,
+       course_name,
+       round(avg((unix_timestamp(out_datetime) - unix_timestamp(in_datetime)) / 60), 2) as avg_duration
+from r6_attend_tb r6
+         left join r5_course_tb r5
+                   on r6.course_id = r5.course_id
+group by r6.course_id, course_name
+order by avg_duration desc;
+
+-- 27. 牛客直播各科目出勤率
+--      统计各科目出勤率 -> attend_rate(%) -> 结果保留两位小数 -> 出勤率 = 出勤人数 / 报名人数 -> 出勤人数（在线时长10min及以上）
+--      按course_id升序
+
+drop table if exists r7_course_tb;
+
+drop table if exists r8_behavior_tb;
+
+drop table if exists r9_attend_tb;
+
+create table if not exists r7_course_tb
+(
+    course_id       int comment '',
+    course_name     string comment '',
+    course_datetime string comment ''
+) comment '课程表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r8_behavior_tb
+(
+    user_id   int comment '',
+    if_vw     int comment '',
+    if_fav    int comment '',
+    if_sign   int comment '',
+    course_id int comment ''
+) comment '用户行为表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r9_attend_tb
+(
+    user_id      int comment '',
+    course_id    int comment '',
+    in_datetime  timestamp comment '',
+    out_datetime timestamp comment ''
+) comment '参课表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO r7_course_tb
+VALUES (1, 'Python', '2021-12-1 19:00-21:00');
+INSERT INTO r7_course_tb
+VALUES (2, 'SQL', '2021-12-2 19:00-21:00');
+INSERT INTO r7_course_tb
+VALUES (3, 'R', '2021-12-3 19:00-21:00');
+
+INSERT INTO r8_behavior_tb
+VALUES (100, 1, 1, 1, 1);
+INSERT INTO r8_behavior_tb
+VALUES (100, 1, 1, 1, 2);
+INSERT INTO r8_behavior_tb
+VALUES (100, 1, 1, 1, 3);
+INSERT INTO r8_behavior_tb
+VALUES (101, 1, 1, 1, 1);
+INSERT INTO r8_behavior_tb
+VALUES (101, 1, 1, 1, 2);
+INSERT INTO r8_behavior_tb
+VALUES (101, 1, 0, 0, 3);
+INSERT INTO r8_behavior_tb
+VALUES (102, 1, 1, 1, 1);
+INSERT INTO r8_behavior_tb
+VALUES (102, 1, 1, 1, 2);
+INSERT INTO r8_behavior_tb
+VALUES (102, 1, 1, 1, 3);
+INSERT INTO r8_behavior_tb
+VALUES (103, 1, 1, 0, 1);
+INSERT INTO r8_behavior_tb
+VALUES (103, 1, 0, 0, 2);
+INSERT INTO r8_behavior_tb
+VALUES (103, 1, 0, 0, 3);
+INSERT INTO r8_behavior_tb
+VALUES (104, 1, 1, 1, 1);
+INSERT INTO r8_behavior_tb
+VALUES (104, 1, 1, 1, 2);
+INSERT INTO r8_behavior_tb
+VALUES (104, 1, 1, 0, 3);
+INSERT INTO r8_behavior_tb
+VALUES (105, 1, 0, 0, 1);
+INSERT INTO r8_behavior_tb
+VALUES (106, 1, 0, 0, 1);
+INSERT INTO r8_behavior_tb
+VALUES (107, 1, 0, 0, 1);
+INSERT INTO r8_behavior_tb
+VALUES (107, 1, 1, 1, 2);
+INSERT INTO r8_behavior_tb
+VALUES (108, 1, 1, 1, 3);
+
+INSERT INTO r9_attend_tb
+VALUES (100, 1, '2021-12-1 19:00:00', '2021-12-1 19:28:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (100, 1, '2021-12-1 19:30:00', '2021-12-1 19:53:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (101, 1, '2021-12-1 19:00:00', '2021-12-1 20:55:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (102, 1, '2021-12-1 19:00:00', '2021-12-1 19:05:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (104, 1, '2021-12-1 19:00:00', '2021-12-1 20:59:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (101, 2, '2021-12-2 19:05:00', '2021-12-2 20:58:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (102, 2, '2021-12-2 18:55:00', '2021-12-2 21:00:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (104, 2, '2021-12-2 18:57:00', '2021-12-2 20:56:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (107, 2, '2021-12-2 19:10:00', '2021-12-2 19:18:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (100, 3, '2021-12-3 19:01:00', '2021-12-3 21:00:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (102, 3, '2021-12-3 18:58:00', '2021-12-3 19:05:00')
+;
+INSERT INTO r9_attend_tb
+VALUES (108, 3, '2021-12-3 19:01:00', '2021-12-3 19:56:00')
+;
+
+use firstlevel;
+
+use secondlevel;
+
+-- 课程表
+select *
+from r7_course_tb;
+
+-- 用户行为表
+select *
+from r8_behavior_tb;
+
+-- 参课表
+select *
+from r9_attend_tb;
+
+with a as (
+    select user_id,
+           course_id,
+           sum((unix_timestamp(out_datetime) - unix_timestamp(in_datetime)) / 60) as online_duration
+    from r9_attend_tb
+    group by user_id, course_id
+),
+     d as (
+         select course_id, sum(if_sign) as sign_total from r8_behavior_tb group by course_id
+     )
+select a.course_id,
+       course_name,
+       round(count(`if`(online_duration >= 10, 1, null)) / (select sign_total from d where d.course_id = a.course_id) *
+             100, 2) as attend_rate
+from a
+         left join r8_behavior_tb b
+                   on a.user_id = b.user_id and a.course_id = b.course_id
+         left join r7_course_tb c
+                   on a.course_id = c.course_id
+group by a.course_id, course_name
+order by course_id asc;
+
+-- 28. 牛客直播各科目同时在线人数
+--      请你统计每个科目最大同时在线人数 -> 按course_id升序
+
+drop table if exists r10_course_tb;
+
+drop table if exists r11_attend_tb;
+
+create table if not exists r10_course_tb
+(
+    course_id       int comment '',
+    course_name     string comment '',
+    course_datetime string comment ''
+) comment '课程表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists r11_attend_tb
+(
+    user_id      int comment '',
+    course_id    int comment '',
+    in_datetime  timestamp comment '',
+    out_datetime timestamp comment ''
+) comment '上课情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO r10_course_tb
+VALUES (1, 'Python', '2021-12-1 19:00-21:00');
+INSERT INTO r10_course_tb
+VALUES (2, 'SQL', '2021-12-2 19:00-21:00');
+INSERT INTO r10_course_tb
+VALUES (3, 'R', '2021-12-3 19:00-21:00');
+
+INSERT INTO r11_attend_tb
+VALUES (100, 1, '2021-12-1 19:00:00', '2021-12-1 19:28:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (100, 1, '2021-12-1 19:30:00', '2021-12-1 19:53:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (101, 1, '2021-12-1 19:00:00', '2021-12-1 20:55:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (102, 1, '2021-12-1 19:00:00', '2021-12-1 19:05:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (104, 1, '2021-12-1 19:00:00', '2021-12-1 20:59:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (101, 2, '2021-12-2 19:05:00', '2021-12-2 20:58:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (102, 2, '2021-12-2 18:55:00', '2021-12-2 21:00:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (104, 2, '2021-12-2 18:57:00', '2021-12-2 20:56:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (107, 2, '2021-12-2 19:10:00', '2021-12-2 19:18:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (100, 3, '2021-12-3 19:01:00', '2021-12-3 21:00:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (102, 3, '2021-12-3 18:58:00', '2021-12-3 19:05:00')
+;
+INSERT INTO r11_attend_tb
+VALUES (108, 3, '2021-12-3 19:01:00', '2021-12-3 19:56:00');
+
+-- 课程表
+select *
+from r10_course_tb;
+
+-- 上课情况表
+select *
+from r11_attend_tb;
+
+with a as (
+    select r11.course_id,
+           course_name,
+           in_datetime,
+           out_datetime
+    from r11_attend_tb r11
+             left join r1_course_tb r10
+                       on r11.course_id = r10.course_id
+),
+     b as (
+         select course_id,
+                course_name,
+                in_datetime as date_time,
+                1           as flag
+         from a
+         union all
+         select course_id,
+                course_name,
+                out_datetime as date_time,
+                -1           as flag
+         from a
+     )
+select course_id,
+       course_name,
+       max(cnt) as max_cnt
+from (
+         select course_id,
+                course_name,
+                date_time,
+                sum(flag) over (partition by course_id, course_name order by date_time asc) as cnt
+         from b
+     ) as table_temp
+group by course_id, course_name
+order by course_id asc;
+
+-- 29. 某乎问答11月份日人均回答量
+--      日人均回答量 -> 回答问题数量 / 答题人数
+--      按回答日期升序，结果保留两位小数
+
+drop table if exists s1_answer_tb;
+
+create table if not exists s1_answer_tb
+(
+    answer_date date comment '',
+    author_id   int comment '',
+    issue_id    string comment '',
+    char_len    int comment ''
+) comment '问答创作者回答情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 101, 'E001', 150);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 101, 'E002', 200);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 102, 'C003', 50);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 103, 'P001', 35);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 104, 'C003', 120);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 105, 'P001', 125);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-1', 102, 'P002', 105);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-2', 101, 'P001', 201);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 200);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-2', 110, 'C001', 225);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 220);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-3', 101, 'C002', 180);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-4', 109, 'E003', 130);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-4', 109, 'E001', 123);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-5', 108, 'C001', 160);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-5', 108, 'C002', 120);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-5', 110, 'P001', 180);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-5', 106, 'P002', 45);
+INSERT INTO s1_answer_tb
+VALUES ('2021-11-5', 107, 'E003', 56);
+
+-- 问答创作者回答情况表
+select *
+from s1_answer_tb;
+
+select answer_date,
+       round(count(*) / count(distinct author_id), 2) as avg_issues
+from s1_answer_tb
+group by answer_date
+order by answer_date asc;
+
+-- 30. 某乎问答高质量的回答中用户属于各级别的数量
+--      回答字数>=100的为高质量回答，请统计某乎高质量回答中用户属于1-2级、3-4级、5-6级的数量分别是多少
+--      按数量降序
+
+use thirdlevel;
+
+drop table if exists s2_author_tb;
+
+drop table if exists s3_answer_tb;
+
+create table if not exists s2_author_tb
+(
+    author_id    int comment '',
+    author_level int comment '',
+    sex          string comment ''
+) comment '问答创作者信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists s3_answer_tb
+(
+    answer_date date comment '',
+    author_id   int comment '',
+    issue_id    string comment '',
+    char_len    int comment ''
+) comment '问答创作者回答情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO s2_author_tb
+VALUES (101, 6, 'm');
+INSERT INTO s2_author_tb
+VALUES (102, 1, 'f');
+INSERT INTO s2_author_tb
+VALUES (103, 1, 'm');
+INSERT INTO s2_author_tb
+VALUES (104, 3, 'm');
+INSERT INTO s2_author_tb
+VALUES (105, 4, 'f');
+INSERT INTO s2_author_tb
+VALUES (106, 2, 'f');
+INSERT INTO s2_author_tb
+VALUES (107, 2, 'm');
+INSERT INTO s2_author_tb
+VALUES (108, 5, 'f');
+INSERT INTO s2_author_tb
+VALUES (109, 6, 'f');
+INSERT INTO s2_author_tb
+VALUES (110, 5, 'm');
+
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 101, 'E001', 150);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 101, 'E002', 200);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 102, 'C003', 50);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 103, 'P001', 35);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 104, 'C003', 120);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 105, 'P001', 125);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-1', 102, 'P002', 105);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-2', 101, 'P001', 201);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 200);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-2', 110, 'C001', 225);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 220);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-3', 101, 'C002', 180);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-4', 109, 'E003', 130);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-4', 109, 'E001', 123);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-5', 108, 'C001', 160);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-5', 108, 'C002', 120);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-5', 110, 'P001', 180);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-5', 106, 'P002', 45);
+INSERT INTO s3_answer_tb
+VALUES ('2021-11-5', 107, 'E003', 56);
+
+-- 问答创作者信息表
+select *
+from s2_author_tb;
+
+-- 问答创作者回答情况表
+select *
+from s3_answer_tb;
+
+select distinct case
+                    when author_level between 1 and 2 then '1-2级'
+                    when author_level between 3 and 4 then '3-4级'
+                    else '5-6级'
+                    end as user_level,
+                case
+                    when author_level between 1 and 2 then count(`if`(author_level between 1 and 2, 1, null)) over ()
+                    when author_level between 3 and 4 then count(`if`(author_level between 3 and 4, 1, null)) over ()
+                    else count(`if`(author_level between 5 and 6, 1, null)) over ()
+                    end as `数量`
+from s3_answer_tb s3
+         left join s2_author_tb s2
+                   on s3.author_id = s2.author_id
+where char_len >= 100
+order by `数量` desc;
+
+--
