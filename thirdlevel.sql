@@ -2628,4 +2628,452 @@ from s3_answer_tb s3
 where char_len >= 100
 order by `数量` desc;
 
---
+-- 31. 某乎问答单日回答问题数大于等于3个的所有用户
+--      统计11月份单日回答问题数大于等于3个的所有用户信息
+--      用户信息 -> author_date(回答日期) -> author_id(创作者id) -> answer_cnt(回答问题个数)
+--      有多条数据符合条件，按answer_date, author_id升序
+
+drop table if exists s4_answer_tb;
+
+create table if not exists s4_answer_tb
+(
+    answer_date date comment '',
+    author_id   int comment '',
+    issue_id    string comment '',
+    char_len    int comment ''
+) comment '问答创作者回答情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 101, 'E001', 150);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 101, 'E002', 200);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 102, 'C003', 50);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 103, 'P001', 35);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 104, 'C003', 120);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 105, 'P001', 125);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-1', 102, 'P002', 105);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-2', 101, 'P001', 201);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 200);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-2', 110, 'C001', 225);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 220);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-3', 101, 'C002', 180);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-4', 109, 'E003', 130);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-4', 109, 'E001', 123);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-5', 108, 'C001', 160);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-5', 108, 'C002', 120);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-5', 110, 'P001', 180);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-5', 106, 'P002', 45);
+INSERT INTO s4_answer_tb
+VALUES ('2021-11-5', 107, 'E003', 56);
+
+-- 问答创作者回答情况表
+select *
+from s4_answer_tb;
+
+select answer_date,
+       author_id,
+       count(*) as answer_cnt
+from s4_answer_tb
+group by answer_date, author_id
+having count(*) >= 3
+order by answer_date asc, author_id asc;
+
+-- 32. 某乎问答回答过教育类问题的用户里有多少用户回答过职场类问题
+
+drop table if exists s5_issue_tb;
+
+drop table if exists s6_answer_tb;
+
+create table if not exists s5_issue_tb
+(
+
+    issue_id   string comment '',
+    issue_type string comment ''
+) comment '问答题目信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists s6_answer_tb
+(
+    answer_date date comment '',
+    author_id   int comment '',
+    issue_id    string comment '',
+    char_len    int comment ''
+) comment '问答创作者回答情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO s5_issue_tb
+VALUES ('E001', 'Education');
+INSERT INTO s5_issue_tb
+VALUES ('E002', 'Education');
+INSERT INTO s5_issue_tb
+VALUES ('E003', 'Education');
+INSERT INTO s5_issue_tb
+VALUES ('C001', 'Career');
+INSERT INTO s5_issue_tb
+VALUES ('C002', 'Career');
+INSERT INTO s5_issue_tb
+VALUES ('C003', 'Career');
+INSERT INTO s5_issue_tb
+VALUES ('C004', 'Career');
+INSERT INTO s5_issue_tb
+VALUES ('P001', 'Psychology');
+INSERT INTO s5_issue_tb
+VALUES ('P002', 'Psychology');
+
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 101, 'E001', 150);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 101, 'E002', 200);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 102, 'C003', 50);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 103, 'P001', 35);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 104, 'C003', 120);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 105, 'P001', 125);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-1', 102, 'P002', 105);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-2', 101, 'P001', 201);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 200);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-2', 110, 'C001', 225);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 220);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-3', 101, 'C002', 180);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-4', 109, 'E003', 130);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-4', 109, 'E001', 123);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-5', 108, 'C001', 160);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-5', 108, 'C002', 120);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-5', 110, 'P001', 180);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-5', 106, 'P002', 45);
+INSERT INTO s6_answer_tb
+VALUES ('2021-11-5', 107, 'E003', 56);
+
+-- 问答题目信息表
+select *
+from s5_issue_tb;
+
+-- 问答创作者回答情况表
+select *
+from s6_answer_tb;
+
+with temp_table as (
+    select s5.issue_id,
+           author_id,
+           issue_type
+    from s6_answer_tb s6
+             left join s5_issue_tb s5
+                       on s6.issue_id = s5.issue_id
+)
+select count(distinct author_id) as cnt
+from temp_table
+where issue_type = 'Education'
+  and author_id in (
+    select author_id
+    from temp_table
+    where issue_type = 'Career'
+);
+
+-- 33. 某乎问答最大连续回答问题天数大于等于3天的用户及其对应等级
+--      有多条符合条件的数据，按author_id升序
+
+drop table if exists s7_author_tb;
+
+drop table if exists s8_answer_tb;
+
+create table if not exists s7_author_tb
+(
+    author_id    int comment '',
+    author_level int comment '',
+    sex          string comment ''
+) comment '问答创作者信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists s8_answer_tbs8_answer_tb
+(
+    answer_date date comment '',
+    author_id   int comment '',
+    issue_id    string comment '',
+    char_len    int comment ''
+) comment '问答创作者回答情况表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+INSERT INTO s7_author_tb
+VALUES (101, 6, 'm');
+INSERT INTO s7_author_tb
+VALUES (102, 1, 'f');
+INSERT INTO s7_author_tb
+VALUES (103, 1, 'm');
+INSERT INTO s7_author_tb
+VALUES (104, 3, 'm');
+INSERT INTO s7_author_tb
+VALUES (105, 4, 'f');
+INSERT INTO s7_author_tb
+VALUES (106, 2, 'f');
+INSERT INTO s7_author_tb
+VALUES (107, 2, 'm');
+INSERT INTO s7_author_tb
+VALUES (108, 5, 'f');
+INSERT INTO s7_author_tb
+VALUES (109, 6, 'f');
+INSERT INTO s7_author_tb
+VALUES (110, 5, 'm');
+
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 101, 'E001', 150);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 101, 'E002', 200);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 102, 'C003', 50);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 103, 'P001', 35);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 104, 'C003', 120);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 105, 'P001', 125);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-1', 102, 'P002', 105);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-2', 101, 'P001', 201);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 200);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-2', 110, 'C001', 225);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-2', 110, 'C002', 220);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-3', 101, 'C002', 180);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-4', 109, 'E003', 130);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-4', 109, 'E001', 123);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-5', 108, 'C001', 160);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-5', 108, 'C002', 120);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-5', 110, 'P001', 180);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-5', 106, 'P002', 45);
+INSERT INTO s8_answer_tb
+VALUES ('2021-11-5', 107, 'E003', 56);
+
+-- 问答创作者信息表
+select *
+from s7_author_tb;
+
+-- 问答创作者回答情况表
+select *
+from s8_answer_tb;
+
+select temp_2.author_id,
+       author_level,
+       count(date_sub(answer_date, ranking)) as cnt
+from (
+         select author_id,
+                answer_date,
+                rank() over (partition by author_id order by answer_date asc) as ranking
+         from (
+                  select answer_date,
+                         author_id
+                  from s8_answer_tb
+                  group by answer_date, author_id
+              ) as temp_1
+     ) as temp_2
+         left join s7_author_tb temp_3
+                   on temp_2.author_id = temp_3.author_id
+group by temp_2.author_id, author_level
+having count(date_sub(answer_date, ranking)) >= 3
+order by temp_2.author_id asc;
+
+-- 34. 找出所有科目成绩都大于某一学科平均成绩的学生
+
+drop table if exists score_info;
+
+create table if not exists score_info
+(
+    uid        string comment '学生id',
+    subject_id string comment '课程id',
+    score      int comment '课程分数'
+) comment '成绩信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into score_info
+values ('1001', '01', 90);
+Insert into score_info
+values ('1001', '02', 90);
+Insert into score_info
+values ('1001', '03', 90);
+Insert into score_info
+values ('1002', '01', 85);
+Insert into score_info
+values ('1002', '02', 85);
+Insert into score_info
+values ('1002', '03', 70);
+Insert into score_info
+values ('1003', '01', 70);
+Insert into score_info
+values ('1003', '02', 70);
+Insert into score_info
+values ('1003', '03', 85);
+
+-- 成绩信息表
+select *
+from score_info;
+
+select uid
+from (
+         select uid,
+                `if`(score > avg_sub, 0, 1) as flag
+         from score_info a
+                  left join (
+             select subject_id,
+                    avg(score) as avg_sub
+             from score_info
+             group by subject_id
+         ) as b
+                            on a.subject_id = b.subject_id
+     ) as table_temp
+group by uid
+having sum(flag) = 0
+order by uid asc;
+
+-- 35. 某平台的用户访问数据
+--      统计每个用户的月累计访问次数以及累计访问次数
+
+drop table if exists action;
+
+create table if not exists action
+(
+    user_id     string comment '用户id',
+    visit_date  string comment '访问日期',
+    visit_count int comment '访问次数'
+) comment '访问信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into action
+values ('u01', '2017/1/21', 5),
+       ('u02', '2017/1/23', 6),
+       ('u03', '2017/1/22', 8),
+       ('u04', '2017/1/20', 3),
+       ('u01', '2017/1/23', 6),
+       ('u01', '2017/2/21', 8),
+       ('u02', '2017/1/23', 6),
+       ('u01', '2017/2/22', 4);
+
+-- 访问信息表
+select *
+from action;
+
+select user_id,
+       visit_month_date,
+       visit_cnt,
+       sum(visit_cnt) over (partition by user_id order by visit_month_date asc) as visit_cnt_total
+from (
+         select user_id,
+                date_format(cast(regexp_replace(visit_date, '/', '-') as timestamp), 'yyyy-MM') as visit_month_date,
+                sum(visit_count)                                                                as visit_cnt
+         from action
+         group by user_id, date_format(cast(regexp_replace(visit_date, '/', '-') as timestamp), 'yyyy-MM')
+     ) as table_temp
+order by user_id asc, visit_month_date asc;
+
+-- 36. 电商店铺数据
+--      有50W个京东店铺，每个顾客访客访问任何一个店铺的任何一个商品时，都会产生一个访问日志，访问日志存储的表名。
+--      求：每个店铺的UV（访客数）
+--      每个店铺访问次数top3的访客信息。
+--      输出店铺名称, 访客id, 访问次数
+
+drop table if exists visit;
+
+create table if not exists visit
+(
+    user_id string comment '',
+    shop    string comment ''
+) comment '访问信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into visit
+values ('u1', 'a'),
+       ('u2', 'b'),
+       ('u1', 'b'),
+       ('u1', 'a'),
+       ('u3', 'c'),
+       ('u4', 'b'),
+       ('u1', 'a'),
+       ('u2', 'c'),
+       ('u5', 'b'),
+       ('u4', 'b'),
+       ('u6', 'c'),
+       ('u2', 'c'),
+       ('u1', 'b'),
+       ('u2', 'a'),
+       ('u2', 'a'),
+       ('u3', 'a'),
+       ('u5', 'a'),
+       ('u5', 'a'),
+       ('u5', 'a');
+
+-- 访问信息表
+select *
+from visit;
+
+select temp_1.shop,
+       uv,
+       user_id,
+       visit_cnt
+from (
+         select shop,
+                user_id,
+                visit_cnt,
+                rank() over (partition by shop order by visit_cnt desc) as ranking
+         from (
+                  select shop,
+                         user_id,
+                         count(*) as visit_cnt
+                  from visit
+                  group by shop, user_id
+              ) as temp_table
+     ) as temp_1
+         left join (select shop,
+                           count(distinct user_id) as uv
+                    from visit
+                    group by shop) as temp_2
+                   on temp_1.shop = temp_2.shop
+where ranking <= 3
+order by temp_1.shop asc, user_id asc;
