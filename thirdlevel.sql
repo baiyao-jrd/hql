@@ -3077,3 +3077,736 @@ from (
                    on temp_1.shop = temp_2.shop
 where ranking <= 3
 order by temp_1.shop asc, user_id asc;
+
+-- 37. 某月销售指标
+--      给出2017年每个月的订单数、用户数、总成交金额
+--      给出2017年11月的新客数（指在11月才有第一笔订单）
+
+use thirdlevel;
+
+drop table if exists order_tab;
+
+create table if not exists order_tab
+(
+    dt       string comment '下单日期',
+    order_id string comment '订单id',
+    user_id  string comment '用户id',
+    amount   decimal(10, 2) comment '订单金额'
+) comment '订单信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+
+INSERT INTO ORDER_TAB
+VALUES ('2017-01-01', '10029028', '1000003251', 33.57),
+       ('2017-01-02', '10029029', '1000003251', 20.57),
+       ('2017-02-01', '10029030', '1000003251', 40.57),
+       ('2017-02-02', '10029031', '1000003252', 60.57),
+       ('2017-02-03', '10029032', '1000003252', 60.57),
+       ('2017-11-03', '10029033', '1000003253', 70.57),
+       ('2017-11-03', '10029034', '1000003253', 80.57);
+
+-- 订单信息表
+select *
+from order_tab;
+
+--      给出2017年每个月的订单数、用户数、总成交金额
+select substr(dt, 1, 7)        as month,
+       count(order_id)         as order_cnt,
+       count(distinct user_id) as users_cnt,
+       sum(amount)             as amount_total
+from order_tab
+group by substr(dt, 1, 7)
+order by month asc;
+
+--      给出2017年11月的新客数（指在11月才有第一笔订单）
+select count(*) as cnt
+from (
+         select user_id,
+                min(dt) as first_date
+         from order_tab
+         group by user_id
+     ) as a
+where substr(first_date, 1, 7) = '2017-11';
+
+-- 38. 统计所有用户和活跃用户的总数及平均年龄
+--      活跃用户 -> 连续两天有访问
+
+drop table if exists user_age;
+
+create table if not exists user_age
+(
+    dt      string comment '日期',
+    user_id string comment '用户id',
+    age     int comment '年龄'
+) comment '活跃用户信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into user_age
+values ('2019-02-11', 'user_1', 23),
+       ('2019-02-11', 'user_2', 19),
+       ('2019-02-11', 'user_3', 39),
+       ('2019-02-11', 'user_1', 23),
+       ('2019-02-11', 'user_3', 39),
+       ('2019-02-11', 'user_1', 23),
+       ('2019-02-12', 'user_2', 19),
+       ('2019-02-13', 'user_1', 23),
+       ('2019-02-15', 'user_2', 19),
+       ('2019-02-16', 'user_2', 19);
+
+-- 活跃用户信息表
+select *
+from user_age;
+
+with a as (
+    select user_id,
+           age
+    from user_age
+    group by user_id, age
+),
+     b as (
+         select dt,
+                user_id,
+                age
+         from user_age
+         group by dt, user_id, age
+     )
+select '所有用户'         as level,
+       count(user_id) as users_total,
+       avg(age)       as avg_age
+from a
+union all
+select '活跃用户'         as level,
+       count(user_id) as users_total,
+       avg(age)       as avg_age
+from (
+         select user_id, age
+         from (
+                  select user_id,
+                         age
+                  from (
+                           select user_id,
+                                  age,
+                                  date_sub(cast(dt as timestamp),
+                                           rank() over (partition by user_id order by dt asc)) as date_flag
+                           from b
+                       ) as c
+                  group by user_id, age, date_flag
+                  having count(date_flag) >= 2
+              ) as d
+         group by user_id, age
+     ) as e;
+
+select cast(dt as timestamp)
+from user_age;
+
+-- 39. 用不同字段统计用户首次购买金额
+--      仅用paymenttime字段，统计所有用户在今年(2022年)10月份第一次购买商品的金额
+--      仅用paymentdate字段，统计所有用户在今年(2022年)10月份第一次购买商品的金额
+
+drop table if exists ordertable;
+
+create table if not exists ordertable
+(
+    userid      string comment '购买用户',
+    money       int comment '金额',
+    paymenttime string comment '支付时间戳',
+    paymentdate string comment '支付日期',
+    orderid     string comment '订单id'
+) comment '订单表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into ordertable
+values ('1001', 100, '1633609057000', '2021-10-07', '1111111111'),
+       ('1002', 110, '1636287457000', '2021-11-07', '2222222222'),
+       ('1003', 120, '1667823457000', '2022-11-07', '3333333333'),
+       ('1004', 130, '1665145057000', '2022-10-07', '4444444444'),
+       ('1005', 140, '1666613857000', '2022-10-24', '5555555555'),
+       ('1005', 150, '1665577057000', '2022-10-12', '6666666666'),
+       ('1004', 160, '1660306657000', '2022-08-12', '7777777777'),
+       ('1003', 170, '1665749857000', '2022-10-14', '8888888888'),
+       ('1005', 180, '1665922657000', '2022-10-16', '9999999999');
+
+-- 订单表
+select *
+from ordertable;
+
+--      仅用paymenttime字段，统计所有用户在今年(2022年)10月份第一次购买商品的金额
+select ordertable.userid,
+       money
+from ordertable
+         join (
+    select userid,
+           min(paymenttime) as day
+    from ordertable
+    where from_unixtime(cast(substr(paymenttime, 1, 10) as bigint), 'yyyy-MM') = '2022-10'
+    group by userid
+) as temp
+              on ordertable.userid = temp.userid and temp.day = ordertable.paymenttime
+order by ordertable.userid asc;
+
+--      仅用paymentdate字段，统计所有用户在今年(2022年)10月份第一次购买商品的金额
+select ordertable.userid,
+       money
+from ordertable
+         join (
+    select userid,
+           min(paymentdate) as day
+    from ordertable
+    where date_format(cast(paymentdate as timestamp), 'yyyy-MM') = '2022-10'
+    group by userid
+) as temp
+              on ordertable.userid = temp.userid and temp.day = ordertable.paymentdate
+order by ordertable.userid asc;
+
+
+select from_unixtime(cast(substr(paymenttime, 1, 10) as bigint), 'yyyy-MM')
+from ordertable;
+
+-- 40. 用户ip地址
+--      求11月9号下午14点（14-15点），访问/api/user/login接口次数的top2的ip地址
+
+drop table if exists ip_info;
+
+create table if not exists ip_info
+(
+    time1     string comment '访问时间',
+    interface string comment '访问接口',
+    ip        string comment '访问的ip地址'
+) comment '线上服务器访问日志信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into ip_info
+values ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.33'),
+       ('2016-11-09 11:23:10', '/api/user/detail', '57.3.2.16'),
+       ('2016-11-09 14:59:40', '/api/user/login', '200.6.5.166'),
+       ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.34'),
+       ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.34'),
+       ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.34'),
+       ('2016-11-09 11:23:10', '/api/user/detail', '57.3.2.16'),
+       ('2016-11-09 23:59:40', '/api/user/login', '200.6.5.166'),
+       ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.34'),
+       ('2016-11-09 11:23:10', '/api/user/detail', '57.3.2.16'),
+       ('2016-11-09 23:59:40', '/api/user/login', '200.6.5.166'),
+       ('2016-11-09 14:22:05', '/api/user/login', '110.23.5.35'),
+       ('2016-11-09 14:23:10', '/api/user/detail', '57.3.2.16'),
+       ('2016-11-09 23:59:40', '/api/user/login', '200.6.5.166'),
+       ('2016-11-09 14:59:40', '/api/user/login', '200.6.5.166'),
+       ('2016-11-09 14:59:40', '/api/user/login', '200.6.5.166');
+
+-- 线上服务器访问日志表
+select *
+from ip_info;
+
+select ip
+from (
+         select ip,
+                rank() over (order by visit_cnt desc) as ranking
+         from (
+                  select ip,
+                         count(*) as visit_cnt
+                  from ip_info
+                  where substr(time1, 1, 13) between '2016-11-09 14' and '2016-11-09 15'
+                    and substr(time1, 1, 13) != '2016-11-09 15'
+                    and interface = '/api/user/login'
+                  group by ip
+              ) as temp_1
+     ) as temp_2
+where ranking in (1, 2)
+order by ip asc;
+
+-- 41. 账号查询
+--      查询各自区组的money排名前十的账号（分组取前十）
+
+drop table if exists account;
+
+create table if not exists account
+(
+    dist_id int comment '区组id',
+    account string comment '账号',
+    gold    string comment '金币'
+) comment '账户信息表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into account
+values (1003, '11133', '23000'),
+       (1001, '11113', '43000'),
+       (1003, '11134', '41000'),
+       (1002, '11123', '33000'),
+       (1003, '11135', '31001'),
+       (1002, '11121', '22000'),
+       (1002, '11122', '31000'),
+       (1001, '11114', '21000'),
+       (1001, '11115', '11001'),
+       (1001, '11111', '25500'),
+       (1001, '11112', '34300'),
+       (1002, '11124', '11700'),
+       (1002, '11125', '23501'),
+       (1003, '11131', '45800'),
+       (1003, '11132', '14900'),
+       (1003, '11133', '23400'),
+       (1001, '11113', '43200'),
+       (1003, '11134', '41700'),
+       (1002, '11123', '33800'),
+       (1003, '11135', '31901'),
+       (1002, '11121', '22100'),
+       (1002, '11122', '31200'),
+       (1001, '11114', '21400'),
+       (1001, '11115', '11101');
+
+-- 账户信息表
+select *
+from account;
+
+select dist_id,
+       account,
+       gold,
+       ranking
+from (
+         select dist_id,
+                account,
+                gold,
+                rank() over (partition by dist_id order by gold desc) as ranking
+         from account
+     ) as table_temp
+where ranking <= 10
+order by dist_id asc, ranking asc;
+
+-- 42. 会员表
+--      销售表中的销售记录可以是会员购买，也可以是非会员购买 -> 非会员就是销售表中memberid为null
+--      销售表中的一个会员可以有多条购买记录
+--      退货表中的退货记录可以是会员，也可以是非会员
+--      一个会员可以有一条或多条退货记录
+
+--      分组查出销售表中所有会员购买金额，同时分组查出退货表中所有会员的退货金额，把会员id相同的购买金额-退款金额得到的结果更新到会员表中对应的会员的积分字段（credits保留两位小数）
+
+drop table if exists member;
+
+drop table if exists sale;
+
+drop table if exists regoods;
+
+create table if not exists member
+(
+    memberid string comment '会员id',
+    credits  decimal(10, 2) comment '积分'
+) comment '会员表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists sale
+(
+    memberid  string comment '会员id',
+    MNAccount double comment '购买金额'
+) comment '销售表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+create table if not exists regoods
+(
+    memberid   string comment '会员id',
+    RMNAccount double comment '退货金额'
+) comment '退货表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into sale
+values ('1001', 50.3),
+       ('1002', 56.5),
+       ('1003', 235),
+       ('1001', 23.6),
+       ('1005', 56.2),
+       (null, 25.6),
+       (null, 33.5);
+
+Insert into regoods
+values ('1001', 20.1),
+       ('1002', 23.6),
+       ('1001', 10.1),
+       (null, 23.5),
+       (null, 10.2),
+       ('1005', 0.8);
+
+-- 会员表
+select *
+from member;
+
+-- 销售表
+select *
+from sale;
+
+-- 退货表
+select *
+from regoods;
+
+insert into table member
+select memberid,
+       sum(credits) as credits
+from (
+         select memberid,
+                sum(MNAccount) as credits
+         from sale
+         group by memberid
+         having memberid in (select memberid from regoods)
+         union all
+         select memberid,
+                -sum(RMNAccount) as credits
+         from regoods
+         group by memberid
+         having memberid in (select memberid from sale)
+     ) as table_temp
+group by memberid
+having memberid is not null;
+
+-- 43. 统计每门课都大于80分的学生姓名
+
+drop table if exists stu_subject;
+
+create table if not exists stu_subject
+(
+    name    string comment '',
+    kecheng string comment '',
+    fenshu  int comment ''
+) comment '课程分数表'
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into stu_subject
+values ('张三', '语文', 81),
+       ('张三', '数学', 75),
+       ('李四', '语文', 76),
+       ('李四', '数学', 90),
+       ('王五', '语文', 81),
+       ('王五', '数学', 100),
+       ('王五', '英语', 90);
+
+-- 课程分数表
+select *
+from stu_subject;
+
+select name,
+       count(`if`(fenshu > 80, null, 1)) as cnt
+from stu_subject
+group by name
+having cnt = 0
+order by name asc;
+
+-- 44. 删除除了id不同其他都相同的学生冗余信息
+
+-- 开启并发查询
+set hive.support.concurrency=true;
+
+-- 开启事务，解决并发查询的一致性问题
+set hive.txn.manager=org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
+
+drop table if exists student;
+
+drop table if exists student1;
+
+-- 中间表
+create table if not exists student
+(
+    id           int comment '',
+    stu_id       string comment '',
+    name         string comment '',
+    subject_id   int comment '',
+    subject_name string comment '',
+    score        string comment ''
+) comment ''
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+-- 支持事务的表
+create table if not exists student1
+(
+    id           int comment '',
+    stu_id       string comment '',
+    name         string comment '',
+    subject_id   int comment '',
+    subject_name string comment '',
+    score        string comment ''
+) comment ''
+    row format delimited fields terminated by ','
+    stored as orc
+    tblproperties ('transactional' = 'true');
+
+Insert into student1
+values (1001, '1234', '张三', 11, '数学', '80'),
+       (1002, '1234', '张三', 11, '数学', '80'),
+       (1003, '1235', '张21', 12, '语文', '90'),
+       (1004, '1235', '张21', 13, '英语', '8'),
+       (1005, '1235', '张21', 11, '数学', '70'),
+       (1006, '1234', '张三', 12, '语文', '80'),
+       (1007, '1234', '张三', 11, '数学', '90'),
+       (1008, '1234', '张三', 13, '英语', '80'),
+       (1009, '1236', '张22', 11, '数学', '80'),
+       (1010, '1234', '张22', 12, '语文', '80');
+
+-- 学生表
+select *
+from student1;
+
+select *
+from student1;
+
+delete
+from student1
+where id not in (
+    select min(id)
+    from student1
+    group by stu_id, name, subject_id, subject_name, score
+);
+
+set hive.execution.engine = mr;
+
+set hive.execution.engine = spark;
+
+-- 45. 排列组合
+--      4个球队进行比赛，显示所有可能的组合
+
+drop table if exists team;
+
+create table if not exists team
+(
+    name string comment ''
+) comment ''
+    row format delimited fields terminated by ','
+    stored as orc;
+
+Insert into team
+values ('a'),
+       ('b'),
+       ('c'),
+       ('d');
+
+-- 队
+select *
+from team;
+
+select a.name as team_a,
+       b.name as team_b
+from team a
+         join team b
+              on a.name <> b.name and a.name < b.name
+order by team_a asc;
+
+-- 46. 行转列
+
+drop table if exists tableName;
+
+create table if not exists tableName
+(
+    year   int comment '',
+    month  int comment '',
+    amount double comment ''
+) comment ''
+    row format delimited fields terminated by ','
+    stored as orc;
+
+Insert into tableName
+values (1991, 1, 1.1),
+       (1991, 2, 1.2),
+       (1991, 3, 1.3),
+       (1991, 4, 1.4),
+       (1992, 1, 2.1),
+       (1992, 2, 2.2),
+       (1992, 3, 2.3),
+       (1992, 4, 2.4);
+
+-- 样例表
+select *
+from tableName;
+
+select year,
+       sum(`if`(month = 1, amount, 0)) as m1,
+       sum(`if`(month = 2, amount, 0)) as m2,
+       sum(`if`(month = 3, amount, 0)) as m3,
+       sum(`if`(month = 4, amount, 0)) as m4
+from tableName
+group by year
+order by year asc;
+
+-- 47. 统计数据中每条记录是否通过，分值大于60的pass，分值小于60的fail
+
+drop table if exists course;
+
+create table if not exists course
+(
+    course_id   int comment '',
+    course_name string comment '',
+    score       int comment ''
+) comment '课程分数表'
+    row format delimited fields terminated by ','
+    stored as orc;
+
+Insert into course
+values (1, 'java', 70),
+       (2, 'oracle', 90),
+       (3, 'xml', 40),
+       (4, 'jsp', 30),
+       (5, 'servlet', 80);
+
+-- 课程分数表
+select *
+from course;
+
+select *,
+       `if`(score >= 60, 'pass', 'fail') as pass_or_fail
+from course;
+
+-- 48. 统计商品指标
+--      给出所有购入商品为两种或两种以上的people_id记录
+--      统计那些顾客购买了两种及以上的商品，列出顾客id，商品种类数量及商品名称
+
+drop table if exists shopMessage;
+
+create table if not exists shopMessage
+(
+    people_id int comment '顾客id',
+    good_name string comment '商品名称',
+    num       int comment '个数'
+) comment '购物表'
+    row format delimited fields terminated by ','
+    stored as orc;
+
+Insert into shopMessage
+values (1001, 'iPhone10', 3),
+       (1002, 'iPhone10', 1),
+       (1001, '巴黎世家', 10),
+       (1002, '巴黎世家', 20),
+       (1003, 'iPhone10', 2),
+       (1001, '巴黎世家', 30),
+       (1003, 'vivo', 1),
+       (1004, 'vivo', 1),
+       (1005, '巴黎世家', 10),
+       (1004, 'vivo', 1),
+       (1006, 'iPhone10', 2),
+       (1001, 'vivo', 1),
+       (1003, '巴黎世家', 2);
+
+-- 购物表
+select *
+from shopMessage;
+
+--      给出所有购入商品为两种或两种以上的people_id记录
+--      统计那些顾客购买了两种及以上的商品，列出顾客id，商品种类数量及商品名称
+select people_id,
+       size(types_set) as types_num,
+       types_set
+from (
+         select people_id,
+                collect_set(good_name) as types_set
+         from shopMessage
+         where people_id in (
+             select people_id
+             from shopMessage
+             group by people_id
+             having count(distinct good_name) >= 2
+         )
+         group by people_id
+     ) as table_temp
+order by people_id asc;
+
+-- 49. 统计每日的win个数和lose个数
+
+drop table if exists info;
+
+create table if not exists info
+(
+    `date` string comment '',
+    result string comment ''
+) comment ''
+    row format delimited fields terminated by ','
+    stored as textfile;
+
+Insert into info
+values ('2005-05-09', 'win'),
+       ('2005-05-09', 'lose'),
+       ('2005-05-09', 'lose'),
+       ('2005-05-09', 'lose'),
+       ('2005-05-10', 'win'),
+       ('2005-05-10', 'lose'),
+       ('2005-05-10', 'lose');
+
+-- 统计表
+select *
+from info;
+
+select `date`,
+       sum(`if`(result = 'win', 1, 0))  as win_cnt,
+       sum(`if`(result = 'lose', 1, 0)) as lose_cnt
+from info
+group by `date`
+order by `date` asc, win_cnt asc;
+
+-- 50. 分区表插数、计算及数据分析
+
+drop table if exists `order`;
+
+drop table if exists order_tmp;
+
+create table if not exists `order`
+(
+    order_id     int comment '订单id',
+    user_id      int comment '用户id',
+    amount       double comment '金额',
+    pay_datatime string comment '付费时间',
+    channel_id   int comment '渠道id'
+) comment ''
+    partitioned by (dt string)
+    row format delimited fields terminated by '\t'
+    stored as textfile;
+
+create table if not exists order_tmp
+(
+    order_id     int comment '订单id',
+    user_id      int comment '用户id',
+    amount       double comment '金额',
+    pay_datatime timestamp comment '付费时间',
+    channel_id   int comment '渠道id'
+) comment ''
+    row format delimited fields terminated by '\t'
+    stored as textfile;
+
+load data local inpath '/opt/module/data/order.txt' into table order_tmp;
+
+insert into table `order`
+select order_id, user_id, amount, pay_datatime, channel_id, date_format(pay_datatime, 'yyyy-MM-dd')
+from order_tmp;
+
+-- 中间表
+select *
+from order_tmp;
+
+-- 分区表
+select *
+from `order`;
+
+-- 查询dt='2018-09-01'里面每个渠道的订单数，下单人数（去重），总金额。
+select channel_id,
+       count(order_id)         as orders_num,
+       count(distinct user_id) as users_num,
+       sum(amount)             as amount_total
+from `order`
+where dt = '2018-09-01'
+group by channel_id
+order by channel_id asc, orders_num asc;
+
+-- 查询dt='2018-09-01'里面每个渠道的金额最大3笔订单。
+select channel_id, order_id, amount, ranking
+from (
+         select order_id,
+                amount,
+                channel_id,
+                rank() over (partition by channel_id order by amount desc) as ranking
+         from `order`
+         where dt = '2018-09-01'
+     ) as table_temp
+order by channel_id asc, ranking asc;
+
+-- 有一天发现订单数据重复，分析原因。
+-- mysql与hive 建表时都不可能重复，可能是迁移失败数据冗余。
