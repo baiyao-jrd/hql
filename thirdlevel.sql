@@ -3810,3 +3810,430 @@ order by channel_id asc, ranking asc;
 
 -- 有一天发现订单数据重复，分析原因。
 -- mysql与hive 建表时都不可能重复，可能是迁移失败数据冗余。
+
+-- 51. 统计最近一个月，销售数量最多的10各商品
+--      统计最近一个月，每个种类里销售数量最多的10个商品（一个订单对应一个商品，一个商品对应一个品类）
+
+drop table if exists t_order;
+
+drop table if exists t_item;
+
+create table if not exists t_order
+(
+    order_id    bigint comment '订单id',
+    item_id     bigint comment '商品id',
+    create_time string comment '下单时间',
+    amount      bigint comment '下单金额'
+) comment '订单表'
+    row format delimited fields terminated by '\t';
+
+create table if not exists t_item
+(
+    item_id   bigint comment '商品id',
+    item_name string comment '商品名称',
+    category  string comment '品类'
+) comment '商品表'
+    row format delimited fields terminated by '\t';
+
+load data local inpath '/opt/module/data/t_order.txt' into table t_order;
+
+load data local inpath '/opt/module/data/t_item.txt' into table t_item;
+
+-- 订单表
+select *
+from t_order;
+
+-- 商品表
+select *
+from t_item;
+
+-- 统计最近一个月，销售数量最多的10个商品
+select a.item_id,
+       count(*) as sales_num
+from t_order a
+         left join t_item b on a.item_id = b.item_id
+where create_time >= date_sub(cast('2018-10-01 00:00:00' as timestamp), 29)
+group by a.item_id
+order by sales_num desc
+limit 10;
+
+-- 统计最近一个月，每个种类里销售数量最多的10个商品（一个订单对应一个商品，一个商品对应一个品类）
+select category,
+       item_id,
+       nums,
+       ranking
+from (
+         select category,
+                item_id,
+                nums,
+                rank() over (partition by category order by nums desc) as ranking
+         from (
+                  select category,
+                         a.item_id,
+                         count(*) as nums
+                  from t_order a
+                           left join t_item b on a.item_id = b.item_id
+                  where create_time >= date_sub(cast('2018-10-01 00:00:00' as timestamp), 30)
+                  group by category, a.item_id
+              ) as table_temp
+     ) as table_temp
+where ranking <= 10
+order by category asc, ranking asc;
+
+-- 52. 统计用户行为
+--      统计平台的每一个用户发过多少日记、共获得多少点赞数。
+--      统计平台的每一个用户发过的日记详情、总日记数量以及每个日记的点赞数。
+
+drop table if exists diary;
+
+drop table if exists `like`;
+
+create table if not exists diary
+(
+    uid    int comment '',
+    log_id int comment '',
+    log    string comment ''
+) comment '日记信息表'
+    row format delimited fields terminated by ','
+    stored as orc;
+
+create table if not exists `like`
+(
+    log_id   int comment '',
+    like_uid int comment ''
+) comment '点赞信息表'
+    row format delimited fields terminated by ','
+    stored as orc;
+
+Insert into `diary`
+values (1001, 100101, '震惊！鸡是卵生动物'),
+       (1002, 100201, '不要再吃隔夜菜了！'),
+       (1003, 100301, '吃烧烤会致癌！18岁年轻小伙顿顿烧烤已进入ICU'),
+       (1001, 100102, '震惊！这些明星都是外国人'),
+       (1001, 100103, '震惊！水加热到100度后会消失'),
+       (1001, 100104, '震惊！如果三天不喝热水，人就会感到非常口渴'),
+       (1002, 100202, '不要再喝隔夜茶了！'),
+       (1003, 100302, '吃辣椒可以预防癌症！18岁小伙顿顿离不开辣椒，从没有患过癌症');
+
+Insert into `like`
+values (100101, 10011),
+       (100101, 10012),
+       (100101, 10013),
+       (100102, 10014),
+       (100102, 10011),
+       (100103, 10011),
+       (100103, 10012),
+       (100103, 10011),
+       (100101, 10014),
+       (100104, 10011),
+       (100104, 10012),
+       (100104, 10013),
+       (100201, 10011),
+       (100201, 10012),
+       (100202, 10013),
+       (100202, 10014),
+       (100301, 10011),
+       (100301, 10012),
+       (100301, 10014),
+       (100302, 10015);
+
+-- 日记信息表
+select *
+from diary;
+
+-- 点赞信息表
+select *
+from `like`;
+
+--      统计平台的每一个用户发过多少日记、共获得多少点赞数。
+select uid,
+       count(distinct a.log_id) as diary_total,
+       count(like_uid)          as favor_total
+from diary as a
+         left join `like` b on a.log_id = b.log_id
+group by uid
+order by uid asc;
+
+--      统计平台的每一个用户发过的日记详情、总日记数量以及每个日记的点赞数。
+with a as (
+    select uid,
+           count(log_id) as diary_total
+    from diary
+    group by uid
+),
+     b as (
+         select log_id,
+                count(*) as favor_total
+         from `like`
+         group by log_id
+     )
+select temp_1.uid,
+       diary_total,
+       temp_1.log_id,
+       log,
+       favor_total
+from diary as temp_1
+         left join a
+                   on temp_1.uid = a.uid
+         left join b
+                   on temp_1.log_id = b.log_id
+order by uid asc, log_id asc;
+
+-- 53. 找版本号
+-- select
+--     v_id,--版本号
+--     max(split(v_id,".")[0]) v1,//主版本不会为空
+--     max(if(split(v_id,".")[1]="",0,split(v_id,".")[1]))v2,--取出子版本并判断是否为空，并给默认值
+--     max(if(split(v_id,".")[2]="",0,split(v_id,".")[2]))v3  --取出阶段版本并判断是否为空，并给默认值
+-- from
+--     t1;
+--
+-- -- 计算出所有版本号排序，要求对于相同的版本号，排序号并列
+-- select
+--     v_id,
+--     rank() over(partition by v_id order by v_id)seq
+-- from
+--     t1;
+
+-- 54. 连续问题
+--      找出连续三天及以上减少碳排放量在100以上的用户
+
+drop table if exists test1;
+
+create table if not exists test1
+(
+    id        bigint comment '用户id',
+    dt        string comment '日期',
+    lowcarbon bigint comment '减少碳排放量'
+) comment ''
+    row format delimited fields terminated by '\t';
+
+Insert into test1
+values (1001, '2021-12-12', 123),
+       (1002, '2021-12-12', 45),
+       (1001, '2021-12-13', 43),
+       (1001, '2021-12-13', 45),
+       (1001, '2021-12-13', 23),
+       (1002, '2021-12-14', 45),
+       (1001, '2021-12-14', 230),
+       (1002, '2021-12-15', 45),
+       (1001, '2021-12-15', 23);
+
+-- 测试用表
+select *
+from test1;
+
+select distinct id
+from (
+         select id,
+                dt,
+                lag(lowcarbon, 1, lowcarbon) over (partition by id order by dt asc)  as lag_flag,
+                lowcarbon                                                            as curren_flag,
+                lead(lowcarbon, 1, lowcarbon) over (partition by id order by dt asc) as lead_flag
+         from (
+                  select id,
+                         dt,
+                         sum(lowcarbon) as lowcarbon
+                  from test1
+                  group by id, dt
+              ) as a
+     ) as b
+where lag_flag > 100
+  and curren_flag > 100
+  and lead_flag > 100
+order by id asc;
+
+select id,
+       flag,
+       count(*) ct
+from (select id,
+             dt,
+             lowcarbon,
+             date_sub(dt, rk) flag
+      from (select id,
+                   dt,
+                   lowcarbon,
+                   rank() over (partition by id order by dt) rk
+            from (select id,
+                         dt,
+                         sum(lowcarbon) lowcarbon
+                  from test1
+                  group by id, dt
+                  having lowcarbon > 100) t1) t2) t3
+group by id, flag
+having ct >= 3;
+
+-- 55. 分组问题
+--      统计每个用户连续的访问记录中，如果时间间隔小于60s，就分为一个组（观察数是标准的时间戳吗？）
+
+drop table if exists test2;
+
+create table if not exists test2
+(
+    id bigint comment '',
+    ts bigint comment ''
+) comment ''
+    row format delimited fields terminated by '\t';
+
+Insert into test2
+values (1001, 17523641234),
+       (1001, 17523641256),
+       (1002, 17523641278),
+       (1001, 17523641334),
+       (1002, 17523641434),
+       (1001, 17523641534),
+       (1001, 17523641544),
+       (1002, 17523641634),
+       (1001, 17523641638),
+       (1001, 17523641654);
+
+-- 测试用表
+select *
+from test2;
+
+select id,
+       ts,
+       sum(flag) over (partition by id order by ts asc) as `group`
+from (
+         select id,
+                ts,
+                `if`(-lag(ts, 1, 0) over (partition by id order by ts asc) + ts < 60, 0, 1) as flag
+         from test2
+     ) as a
+order by id asc;
+
+-- 56. 计算每个用户最大的连续登录天数，可以间隔一天。如：如果一个用户在1,3,5,6登录游戏，则视为连续6天登录。
+
+drop table if exists game_user;
+
+create table if not exists game_user
+(
+    id bigint comment '用户id',
+    dt string comment '日期'
+) comment ''
+    row format delimited fields terminated by '\t';
+
+Insert into game_user
+values (1001, '2022-05-01 23:21:33'),
+       (1003, '2022-05-02 23:21:33'),
+       (1002, '2022-05-01 23:21:33'),
+       (1003, '2022-05-01 23:21:33'),
+       (1001, '2022-05-03 23:21:33'),
+       (1003, '2022-05-04 23:21:33'),
+       (1002, '2022-05-01 23:21:33'),
+       (1001, '2022-05-05 23:21:33'),
+       (1001, '2022-05-01 23:21:33'),
+       (1002, '2022-05-06 23:21:33'),
+       (1001, '2022-05-06 23:21:33'),
+       (1001, '2022-05-07 23:21:33');
+
+-- 登录信息表
+select *
+from game_user;
+
+select id,
+       max(max_day) as max_day
+from (
+         select id,
+                ranking,
+                datediff(max(ymd), min(ymd)) + 1 as max_day
+         from (
+                  select id,
+                         ymd,
+                         sum(flag) over (partition by id order by ymd asc) as ranking
+                  from (
+                           select id,
+                                  ymd,
+                                  `if`(datediff(ymd, lag(ymd, 1, null) over (partition by id order by ymd asc)) <= 2, 0,
+                                       1) as flag
+                           from (
+                                    select id,
+                                           date_format(cast(dt as timestamp), 'yyyy-MM-dd') as ymd
+                                    from game_user
+                                    group by id, date_format(cast(dt as timestamp), 'yyyy-MM-dd')
+                                ) as a
+                       ) as b
+              ) as c
+         group by id, ranking
+     ) as d
+group by id
+order by id asc;
+
+set hive.execution.engine = mr;
+
+set hive.execution.engine = spark;
+
+-- 57. 打折日期交叉问题
+--      计算每个商品总的打折销售天数，注意其中的交叉日期
+--      比如vivo品牌，第一次活动时间为2021-06-05到2021-06-15，第二次活动时间为2021-06-09到2021-06-21其中9号到15号为重复天数，只统计一次，即vivo总打折天数为2021-06-05到2021-06-21共计17天。
+
+drop table if exists good_promotion;
+
+create table if not exists good_promotion (
+    brand string comment '品牌',
+    stt string comment '打折开始日期',
+    edt string comment '打折结束日期'
+) comment ''
+row format delimited fields terminated by '\t';
+
+Insert into good_promotion values('oppo','2021-06-05','2021-06-09'),
+('oppo','2021-06-11','2021-06-21'),
+('vivo','2021-06-05','2021-06-15'),
+('vivo','2021-06-09','2021-06-21'),
+('redmi','2021-06-05','2021-06-21'),
+('redmi','2021-06-09','2021-06-15'),
+('redmi','2021-06-17','2021-06-26'),
+('huawei','2021-06-05','2021-06-26'),
+('huawei','2021-06-09','2021-06-15'),
+('huawei','2021-06-17','2021-06-21');
+
+-- 商品促销信息表
+select *
+from good_promotion;
+
+select *
+from good_promotion;
+
+-- 58. 统计平台最高峰同时在线的主播人数
+
+drop table if exists show_user;
+
+create table if not exists show_user
+(
+    id  bigint comment '主播id',
+    stt string comment '开播时间',
+    edt string comment '关播时间'
+) comment ''
+    row format delimited fields terminated by '\t'
+    stored as orc;
+
+Insert into show_user
+values (1001, '2021-06-14 12:12:12', '2021-06-14 18:12:12'),
+       (1003, '2021-06-14 13:12:12', '2021-06-14 16:12:12'),
+       (1004, '2021-06-14 13:15:12', '2021-06-14 20:12:12'),
+       (1002, '2021-06-14 15:12:12', '2021-06-14 16:12:12'),
+       (1005, '2021-06-14 15:18:12', '2021-06-14 20:12:12'),
+       (1001, '2021-06-14 20:12:12', '2021-06-14 23:12:12'),
+       (1006, '2021-06-14 21:12:12', '2021-06-14 23:15:12'),
+       (1007, '2021-06-14 22:12:12', '2021-06-14 23:10:12');
+
+-- 主播开播信息表
+select *
+from show_user;
+
+select max(flag_cnt) as max_cnt
+from (
+         select date_time,
+                sum(flag) over (order by date_time asc) as flag_cnt
+         from (
+                  select id,
+                         stt as date_time,
+                         1   as flag
+                  from show_user
+                  union all
+                  select id,
+                         edt as date_time,
+                         -1  as flag
+                  from show_user
+              ) as a
+     ) as b;
