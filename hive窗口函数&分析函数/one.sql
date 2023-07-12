@@ -301,9 +301,9 @@ from big_data_t2;
 -- 不指定order by会排序混乱，结果错误
 
 select *,
-       row_number() over (partition by cookie_id order by create_time)    as rn,
+       row_number() over (partition by cookie_id order by create_time)         as rn,
        first_value(pv) over (partition by cookie_id order by create_time desc) as `first_value`,
-       last_value(pv) over (partition by cookie_id order by create_time)  as `last_value`
+       last_value(pv) over (partition by cookie_id order by create_time)       as `last_value`
 from big_data_t2;
 
 -- cookie1,2018-04-16,4,7,4,4
@@ -321,3 +321,129 @@ from big_data_t2;
 -- cookie2,2018-04-11,3,2,7,3
 -- cookie2,2018-04-10,2,1,7,2
 
+-- cume_dist,percent_rank 函数
+-- 不常用, 序列函数不支持window子句
+drop table big_data_t3;
+
+create table big_data_t3
+(
+    dept_id string,
+    user_id string,
+    salary  int
+) comment ''
+    row format delimited fields terminated by ','
+    stored as textfile
+    location '/warehouse/test/big_data_t3';
+
+load data local inpath '/opt/module/datas/big_data_t3.dat' into table big_data_t3;
+
+insert into table big_data_t3
+values (' d1', 'user4', 4000);
+
+select *
+from big_data_t3;
+
+--  d1,user4,4000
+--  d1,user1,1000
+--  d1,user2,2000
+--  d1,user3,3000
+--  d2,user4,4000
+--  d2,user5,5000
+
+
+-- cume_dist
+-- 小于等于当前值的行数/分组内总行数  order 默认顺序 正序 升序
+-- 比如，统计小于等于当前薪水的人数，所占总人数的比例
+select *,
+       cume_dist() over (order by salary)                      as `cume_dist_1`,
+       cume_dist() over (partition by dept_id order by salary) as `cume_dist_2`
+from big_data_t3;
+
+--  d1,user1,1000,0.2,0.3333333333333333
+--  d1,user2,2000,0.4,0.6666666666666666
+--  d1,user3,3000,0.6,1
+--  d2,user4,4000,0.8,0.5
+--  d2,user5,5000,1,1
+
+-- PERCENT_RANK
+-- 分组内当前行的RANK值-1/分组内总行数-1
+
+SELECT dept_id,
+       user_id,
+       salary,
+       PERCENT_RANK() OVER (ORDER BY salary)                      AS `percent_rank`, --分组内
+       RANK() OVER (ORDER BY salary)                              AS `rank`,         --分组内RANK值
+       SUM(1) OVER (PARTITION BY NULL)                            AS `sum`,          --分组内总行数
+       PERCENT_RANK() OVER (PARTITION BY dept_id ORDER BY salary) AS `percent_rank`
+FROM big_data_t3;
+
+--  d1,user1,1000,0,1,6,0
+--  d1,user2,2000,0.2,2,6,0.3333333333333333
+--  d1,user3,3000,0.4,3,6,0.6666666666666666
+--  d1,user4,4000,0.6,4,6,1
+--  d2,user4,4000,0.6,4,6,0
+--  d2,user5,5000,1,6,6,1
+
+-- grouping sets,grouping__id,cube,rollup 函数
+create table big_data_t4
+(
+    month     string,
+    day       string,
+    cookie_id string
+) comment ''
+    row format delimited fields terminated by ','
+    stored as textfile
+    location '/warehouse/test/big_data_t4';
+
+load data local inpath '/opt/module/datas/big_data_t4.dat' into table big_data_t4;
+
+select *
+from big_data_t4;
+
+-- 2018-03,2018-03-10,cookie1
+-- 2018-03,2018-03-10,cookie5
+-- 2018-03,2018-03-12,cookie7
+-- 2018-04,2018-04-12,cookie3
+-- 2018-04,2018-04-13,cookie2
+-- 2018-04,2018-04-13,cookie4
+-- 2018-04,2018-04-16,cookie4
+-- 2018-03,2018-03-10,cookie2
+-- 2018-03,2018-03-10,cookie3
+-- 2018-04,2018-04-12,cookie5
+-- 2018-04,2018-04-13,cookie6
+-- 2018-04,2018-04-15,cookie3
+-- 2018-04,2018-04-15,cookie2
+-- 2018-04,2018-04-16,cookie1
+
+-- grouping sets: 将多个group by 逻辑写在一个sql语句中, 等价于将不同维度的GROUP BY结果集进行UNION ALL。
+--
+-- grouping__id: 表示结果属于哪一个分组集合
+
+SELECT month,
+       day,
+       COUNT(DISTINCT cookie_id) AS uv,
+       GROUPING__ID
+FROM big_data_t4
+GROUP BY month, day
+    GROUPING SETS ( month, day)
+ORDER BY GROUPING__ID;
+
+-- 2018-04,   <null>,        6,    1
+-- 2018-03,   <null>,        5,    1
+-- <null>,    2018-04-13,    3,    2
+-- <null>,    2018-04-15,    2,    2
+-- <null>,    2018-03-10,    4,    2
+-- <null>,    2018-03-12,    1,    2
+-- <null>,    2018-04-12,    2,    2
+-- <null>,    2018-04-16,    2,    2
+
+-- 根据grouping sets中的分组条件month，day，1是代表month，2是代表day
+
+-- 等价于
+SELECT month, NULL, COUNT(DISTINCT cookie_id) AS uv, 1 AS GROUPING__ID
+FROM big_data_t4
+GROUP BY month
+UNION ALL
+SELECT NULL as month, day, COUNT(DISTINCT cookie_id) AS uv, 2 AS GROUPING__ID
+FROM big_data_t4
+GROUP BY day;
