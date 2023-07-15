@@ -1106,24 +1106,381 @@ from t14;
 
 -- 工作日：周一至周五09:30-18:30
 -- (1) 计算上表中从申请到通过占用的工作时长
+
+select *
+from t14;
+
+-- 1,申请,2017-04-14 18:03:00
+-- 1,通过,2017-04-17 09:43:00
+-- 2,申请,2017-04-13 17:02:00
+-- 2,通过,2017-04-15 09:42:00
+
 select a,
        max(case b when '申请' then c end) as apply_time,
-       max(case )
+       max(case b when '通过' then c end) as pass_time
 from t14
 group by a;
 
+-- 1,2017-04-14 18:03:00,2017-04-17 09:43:00
+-- 2,2017-04-13 17:02:00,2017-04-15 09:42:00
+
+select *,
+       unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+       unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')             as time_diff,
+       datediff(substr(pass_time, 1, 10), substr(apply_time, 1, 10)) as day_diff
+from (
+         select a,
+                max(case b when '申请' then c end) as apply_time,
+                max(case b when '通过' then c end) as pass_time
+         from t14
+         group by a
+     ) as temp_a;
+
+-- 1,   2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,     3
+-- 2,   2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,     2
+
+select unix_timestamp('2023-07-15 15:50:01', 'yyyy-MM-dd HH:mm:ss') -
+       unix_timestamp('2023-07-15 15:50:00', 'yyyy-MM-dd HH:mm:ss') as test;
+
+select *,
+       substr(repeat(concat(substr(apply_time, 1, 10), ','), day_diff + 1), 1, 11 * (day_diff + 1) - 1) as strs
+from (
+         select *,
+                unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+                unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')             as time_diff,
+                datediff(substr(pass_time, 1, 10), substr(apply_time, 1, 10)) as day_diff
+         from (
+                  select a,
+                         max(case b when '申请' then c end) as apply_time,
+                         max(case b when '通过' then c end) as pass_time
+                  from t14
+                  group by a
+              ) as temp_a
+     ) as temp_b;
+
+-- 1,   2017-04-14 18:03:00,    2017-04-17 09:43:00,229200,     3,      "2017-04-14,2017-04-14,2017-04-14,2017-04-14"
+-- 2,   2017-04-13 17:02:00,    2017-04-15 09:42:00,146400,     2,      "2017-04-13,2017-04-13,2017-04-13"
+
+select a,
+       apply_time,
+       pass_time,
+       time_diff,
+       day_diff,
+       start_day,
+       row_number() over (partition by a) as rn,
+       count(*) over (partition by a)     as cnt
+from (
+         select *,
+                substr(repeat(concat(substr(apply_time, 1, 10), ','), day_diff + 1), 1, 11 * (day_diff + 1) - 1) as strs
+         from (
+                  select *,
+                         unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+                         unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')             as time_diff,
+                         datediff(substr(pass_time, 1, 10), substr(apply_time, 1, 10)) as day_diff
+                  from (
+                           select a,
+                                  max(case b when '申请' then c end) as apply_time,
+                                  max(case b when '通过' then c end) as pass_time
+                           from t14
+                           group by a
+                       ) as temp_a
+              ) as temp_b
+     ) as temp_c
+         lateral view explode(split(strs, ',')) tmp_d as start_day;
+
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    1,    4
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    2,    4
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    3,    4
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    4,    4
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    1,    3
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    2,    3
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    3,    3
+
+select *,
+       date_add(start_day, rn - 1) as dates
+from (
+         select a,
+                apply_time,
+                pass_time,
+                time_diff,
+                day_diff,
+                start_day,
+                row_number() over (partition by a) as rn,
+                count(*) over (partition by a)     as cnt
+         from (
+                  select *,
+                         substr(repeat(concat(substr(apply_time, 1, 10), ','), day_diff + 1), 1,
+                                11 * (day_diff + 1) - 1) as strs
+                  from (
+                           select *,
+                                  unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+                                  unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')             as time_diff,
+                                  datediff(substr(pass_time, 1, 10), substr(apply_time, 1, 10)) as day_diff
+                           from (
+                                    select a,
+                                           max(case b when '申请' then c end) as apply_time,
+                                           max(case b when '通过' then c end) as pass_time
+                                    from t14
+                                    group by a
+                                ) as temp_a
+                       ) as temp_b
+              ) as temp_c
+                  lateral view explode(split(strs, ',')) tmp_d as start_day
+     ) as temp_e;
+
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    1,    4,    2017-04-14
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    2,    4,    2017-04-15
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    3,    4,    2017-04-16
+-- 1,    2017-04-14 18:03:00,    2017-04-17 09:43:00,    229200,    3,    2017-04-14,    4,    4,    2017-04-17
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    1,    3,    2017-04-13
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    2,    3,    2017-04-14
+-- 2,    2017-04-13 17:02:00,    2017-04-15 09:42:00,    146400,    2,    2017-04-13,    3,    3,    2017-04-15
+
+select a,
+       concat(round(sum(diff / 3600), 2), 'h') as hour
+from (
+         select *,
+                case
+                    when is_work = 1 and rn = 1 then unix_timestamp(concat(dates, ' 18:30:00'), 'yyyy-MM-dd HH:mm:ss') -
+                                                     unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')
+                    when is_work = 0 then 0
+                    when is_work = 1 and rn = cnt then unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+                                                       unix_timestamp(concat(dates, ' 09:30:00'), 'yyyy-MM-dd HH:mm:ss')
+                    when is_work = 1 and rn != cnt then 9 * 3600
+                    end as diff
+         from (
+                  select *,
+                         date_add(start_day, rn - 1) as dates
+                  from (
+                           select a,
+                                  apply_time,
+                                  pass_time,
+                                  time_diff,
+                                  day_diff,
+                                  start_day,
+                                  row_number() over (partition by a) as rn,
+                                  count(*) over (partition by a)     as cnt
+                           from (
+                                    select *,
+                                           substr(repeat(concat(substr(apply_time, 1, 10), ','), day_diff + 1), 1,
+                                                  11 * (day_diff + 1) - 1) as strs
+                                    from (
+                                             select *,
+                                                    unix_timestamp(pass_time, 'yyyy-MM-dd HH:mm:ss') -
+                                                    unix_timestamp(apply_time, 'yyyy-MM-dd HH:mm:ss')             as time_diff,
+                                                    datediff(substr(pass_time, 1, 10), substr(apply_time, 1, 10)) as day_diff
+                                             from (
+                                                      select a,
+                                                             max(case b when '申请' then c end) as apply_time,
+                                                             max(case b when '通过' then c end) as pass_time
+                                                      from t14
+                                                      group by a
+                                                  ) as temp_a
+                                         ) as temp_b
+                                ) as temp_c
+                                    lateral view explode(split(strs, ',')) tmp_d as start_day
+                       ) as temp_e
+              ) as temp_f
+                  join t13 on t13.date_id = temp_f.dates
+     ) as temp_g
+group by a;
+
+-- 1,   0.67h
+-- 2,   10.47h
+
+-- /*********************【15. 时间序列--进度及剩余】**********************/
+create table t15
+(
+    date_id string,
+    is_work string
+) comment '日期表'
+    row format delimited fields terminated by '\t'
+    stored as orc
+    location '/warehouse/test/t15'
+    tblproperties ('orc.compress' = 'snappy');
+
+insert into table t15
+values ('2017-07-30', 0),
+       ('2017-07-31', 1),
+       ('2017-08-01', 1),
+       ('2017-08-02', 1),
+       ('2017-08-03', 1),
+       ('2017-08-04', 1),
+       ('2017-08-05', 0),
+       ('2017-08-06', 0),
+       ('2017-08-07', 1);
+
+select *
+from t15;
+
+-- 2017-07-30,    0
+-- 2017-07-31,    1
+-- 2017-08-01,    1
+-- 2017-08-02,    1
+-- 2017-08-03,    1
+-- 2017-08-04,    1
+-- 2017-08-05,    0
+-- 2017-08-06,    0
+-- 2017-08-07,    1
+
+-- (1) 求每天的累计周工作日，剩余周工作日
+-- 'u' 是一个日期格式化字符，表示将日期转换为一个数字，表示该日期是一周中的第几天，其中周一为 1，周日为 7。
+select date_id
+     , case date_format(date_id, 'u')
+           when 1 then 1
+           when 2 then 2
+           when 3 then 3
+           when 4 then 4
+           when 5 then 5
+           when 6 then 5
+           when 7 then 5
+    end as week_to_work
+     , case date_format(date_id, 'u')
+           when 1 then 4
+           when 2 then 3
+           when 3 then 2
+           when 4 then 1
+           when 5 then 0
+           when 6 then 0
+           when 7 then 0
+    end as week_left_work
+from t15;
+
+-- 2017-07-30,    5,    0
+-- 2017-07-31,    1,    4
+-- 2017-08-01,    2,    3
+-- 2017-08-02,    3,    2
+-- 2017-08-03,    4,    1
+-- 2017-08-04,    5,    0
+-- 2017-08-05,    5,    0
+-- 2017-08-06,    5,    0
+-- 2017-08-07,    1,    4
+
+select date_id,
+       week_to_work,
+       work_days - week_to_work as week_left_work
+from (
+         select date_id,
+                sum(is_work) over (partition by year, weekofyear order by date_id) as week_to_work,
+                sum(is_work) over (partition by year, weekofyear)                  as work_days
+         from (
+                  select *,
+                         year(date_id)       as year,
+                         weekofyear(date_id) as weekofyear
+                  from t15
+              ) as temp_a
+     ) as temp_b
+order by date_id;
 
 
-SELECT a
-     , MAX(case WHEN b = '申请' THEN c end) apply_time
-     , MAX(case WHEN b = '通过' THEN c end) pass_time
-FROM t14
-GROUP BY a
+-- 2017-07-30,    0,    0
+-- 2017-07-31,    1,    4
+-- 2017-08-01,    2,    3
+-- 2017-08-02,    3,    2
+-- 2017-08-03,    4,    1
+-- 2017-08-04,    5,    0
+-- 2017-08-05,    5,    0
+-- 2017-08-06,    5,    0
+-- 2017-08-07,    1,    0
 
 
+-- /*********************【16. 时间序列--构造日期】**********************/
+-- (1) 直接使用SQL实现一张日期维度表，包含以下字段：
+-- date                	string              	日期
+-- d_week              	string              	年内第几周
+-- weeks               	int                 	周几
+-- w_start             	string              	周开始日
+-- w_end               	string              	周结束日
+-- d_month         	    int                 	第几月
+-- m_start         	    string              	月开始日
+-- m_end           	    string              	月结束日
+-- d_quarter            int                     第几季
+-- q_start         	    string              	季开始日
+-- q_end           	    string              	季结束日
+-- d_year               int                     年份
+-- y_start         	    string              	年开始日
+-- y_end           	    string              	年结束日
 
--- /*********************【2. 排名中取他值】**********************/
--- /*********************【2. 排名中取他值】**********************/
+drop table if exists dim_date;
+
+create table if not exists dim_date
+(
+    `date`    string comment '日期',
+    d_week    string comment '年内第几周',
+    weeks     string comment '周几',
+    w_start   string comment '周开始日',
+    w_end     string comment '周结束日',
+    d_month   string comment '第几月',
+    m_start   string comment '月开始日',
+    m_end     string comment '月结束日',
+    d_quarter int comment '第几季',
+    q_start   string comment '季开始日',
+    q_end     string comment '季结束日',
+    d_year    int comment '年份',
+    y_start   string comment '年开始日',
+    y_end     string comment '年结束日'
+);
+
+--自然月: 指每月的1号到那个月的月底，它是按照阳历来计算的。就是从每月1号到月底，不管这个月有30天，31天，29天或者28天，都算是一个自然月。
+
+insert overwrite table dim_date
+select `date`
+     , d_week                                                                                           --年内第几周
+     , case weekid
+           when 0 then '周日'
+           when 1 then '周一'
+           when 2 then '周二'
+           when 3 then '周三'
+           when 4 then '周四'
+           when 5 then '周五'
+           when 6 then '周六'
+    end                                                                                      as weeks   -- 周
+     , date_add(next_day(`date`, 'MO'), -7)                                                  as w_start --周一
+     , date_add(next_day(`date`, 'MO'), -1)                                                  as w_end   -- 周日_end
+     -- 月份日期
+     , concat('第', monthid, '月')                                                             as d_month
+     , m_start
+     , m_end
+     -- 季节
+     , quarterid                                                                             as d_quart
+     , concat(d_year, '-', substr(concat('0', (quarterid - 1) * 3 + 1), -2), '-01')          as q_start --季开始日
+     , date_sub(concat(d_year, '-', substr(concat('0', (quarterid) * 3 + 1), -2), '-01'), 1) as q_end   --季结束日
+     -- 年
+     , d_year
+     , y_start
+     , y_end
+from (
+         select `date`
+              , pmod(datediff(`date`, '2012-01-01'), 7)            as weekid    --获取周几
+              , cast(substr(`date`, 6, 2) as int)                  as monthid   --获取月份
+              , case
+                    when cast(substr(`date`, 6, 2) as int) <= 3 then 1
+                    when cast(substr(`date`, 6, 2) as int) <= 6 then 2
+                    when cast(substr(`date`, 6, 2) as int) <= 9 then 3
+                    when cast(substr(`date`, 6, 2) as int) <= 12 then 4
+             end                                                   as quarterid --获取季节 可以直接使用 quarter(`date`)
+              , substr(`date`, 1, 4)                               as d_year    -- 获取年份
+              , trunc(`date`, 'YYYY')                              as y_start   --年开始日
+              , date_sub(trunc(add_months(`date`, 12), 'YYYY'), 1) as y_end     --年结束日
+              , date_sub(`date`, dayofmonth(`date`) - 1)           as m_start   --当月第一天
+              , last_day(date_sub(`date`, dayofmonth(`date`) - 1))    m_end     --当月最后一天
+              , weekofyear(`date`)                                 as d_week    --年内第几周
+         from (
+                  -- '2021-04-01'是开始日期, '2022-03-31'是截止日期
+                  select date_add('2021-04-01', t0.pos) as `date`
+                  from (
+                           select posexplode(
+                                          split(
+                                                  repeat('o', datediff(
+                                                          from_unixtime(unix_timestamp('2022-03-31', 'yyyy-MM-dd'),
+                                                                        'yyyy-MM-dd'),
+                                                          '2021-04-01')), 'o'
+                                              )
+                                      )
+                       ) t0
+              ) t1
+     ) t2;
+
 -- /*********************【2. 排名中取他值】**********************/
 -- /*********************【2. 排名中取他值】**********************/
 -- /*********************【2. 排名中取他值】**********************/
